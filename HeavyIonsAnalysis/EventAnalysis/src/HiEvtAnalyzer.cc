@@ -407,9 +407,10 @@ HiEvtAnalyzer::beginJob()
     thi_->Branch("NchargedPtCutMR",&fNchargedPtCutMR,"NchargedPtCutMR/I");
   }
   if (doMC_) {
-    thi_->Branch("ProcessID",&proc_id,"ProcessID/I");
+    //thi_->Branch("ProcessID",&proc_id,"ProcessID/I");
     thi_->Branch("pthat",&pthat,"pthat/F");
     thi_->Branch("weight",&weight,"weight/F");
+    /*
     thi_->Branch("alphaQCD",&alphaQCD,"alphaQCD/F");
     thi_->Branch("alphaQED",&alphaQED,"alphaQED/F");
     thi_->Branch("qScale",&qScale,"qScale/F");
@@ -421,9 +422,11 @@ HiEvtAnalyzer::beginJob()
     thi_->Branch("ttbar_w",&ttbar_w);
     thi_->Branch("npus",&npus);
     thi_->Branch("tnpus",&tnpus);
+    */
   }
 
   // Centrality
+  /*
   thi_->Branch("hiBin",&hiBin,"hiBin/I");
   thi_->Branch("hiHF",&hiHF,"hiHF/F");
   thi_->Branch("hiHFplus",&hiHFplus,"hiHFplus/F");
@@ -450,7 +453,7 @@ HiEvtAnalyzer::beginJob()
   thi_->Branch("hiNtracksPtCut",&hiNtracksPtCut,"hiNtracksPtCut/I");
   thi_->Branch("hiNtracksEtaCut",&hiNtracksEtaCut,"hiNtracksEtaCut/I");
   thi_->Branch("hiNtracksEtaPtCut",&hiNtracksEtaPtCut,"hiNtracksEtaPtCut/I");
-
+  */
   // Event plane
   if (doEvtPlane_) {
     thi_->Branch("hiNevtPlane",&nEvtPlanes,"hiNevtPlane/I");

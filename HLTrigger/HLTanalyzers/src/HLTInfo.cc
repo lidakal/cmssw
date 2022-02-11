@@ -75,19 +75,33 @@ void HLTInfo::analyze(const edm::Handle<edm::TriggerResults>& hltresults,
       int itdum = 0;
       for (auto & dummyBranche : dummyBranches_) {
         TString trigName(dummyBranche.data());
-        HltTree->Branch(trigName,trigflag+itdum,trigName+"/I");
-        HltTree->Branch(trigName+"_Prescl",trigPrescl+itdum,trigName+"_Prescl/I");
-        pathtoindex[dummyBranche] = itdum;
-        ++itdum;
+	if(trigName.Contains("HLT_HIL3Mu3_v") ||  trigName.Contains("HLT_HIL3Mu5_v") || trigName.Contains("HLT_HIL3Mu7_v") || 
+	   trigName.Contains("HLT_HIAK4PFJet30_v")  || trigName.Contains("HLT_HIAK4PFJet40_v")  || trigName.Contains("HLT_HIAK4PFJet60_v")  || 
+	   trigName.Contains("HLT_HIAK4PFJet80_v")  || trigName.Contains("HLT_HIAK4PFJet100_v")  || 
+	   trigName.Contains("HLT_HIL3Mu3_AK4PFJet30_v") || trigName.Contains("HLT_HIL3Mu3_AK4PFJet40_v") || trigName.Contains("HLT_HIL3Mu3_AK4PFJet60_v") ||
+	   trigName.Contains("HLT_HIL3Mu5_AK4PFJet30_v") || trigName.Contains("HLT_HIL3Mu5_AK4PFJet40_v") || trigName.Contains("HLT_HIL3Mu5_AK4PFJet60_v")
+	   ){
+	  HltTree->Branch(trigName,trigflag+itdum,trigName+"/I");
+	  HltTree->Branch(trigName+"_Prescl",trigPrescl+itdum,trigName+"_Prescl/I");
+	  pathtoindex[dummyBranche] = itdum;
+	  ++itdum;
+	}
       }
 
       for (int itrig = 0; itrig != ntrigs; ++itrig) {
         const std::string& trigName = triggerNames.triggerName(itrig);
         if (pathtoindex.find(trigName) == pathtoindex.end()) {
           TString TSname = trigName;
-          HltTree->Branch(TSname,trigflag+itdum+itrig,TSname+"/I");
-          HltTree->Branch(TSname+"_Prescl",trigPrescl+itdum+itrig,TSname+"_Prescl/I");
-          pathtoindex[trigName] = itdum + itrig;
+	  if(TSname.Contains("HLT_HIL3Mu3_v") || TSname.Contains("HLT_HIL3Mu5_v") || TSname.Contains("HLT_HIL3Mu7_v") ||
+	     TSname.Contains("HLT_HIAK4PFJet30_v")  || TSname.Contains("HLT_HIAK4PFJet40_v")  || TSname.Contains("HLT_HIAK4PFJet60_v")  || 
+	     TSname.Contains("HLT_HIAK4PFJet80_v")  || TSname.Contains("HLT_HIAK4PFJet100_v")  || 
+	     TSname.Contains("HLT_HIL3Mu3_AK4PFJet30_v") || TSname.Contains("HLT_HIL3Mu3_AK4PFJet40_v") || TSname.Contains("HLT_HIL3Mu3_AK4PFJet60_v") ||
+	     TSname.Contains("HLT_HIL3Mu5_AK4PFJet30_v") || TSname.Contains("HLT_HIL3Mu5_AK4PFJet40_v") || TSname.Contains("HLT_HIL3Mu5_AK4PFJet60_v")
+	     ){
+	    HltTree->Branch(TSname,trigflag+itdum+itrig,TSname+"/I");
+	    HltTree->Branch(TSname+"_Prescl",trigPrescl+itdum+itrig,TSname+"_Prescl/I");
+	    pathtoindex[trigName] = itdum + itrig;
+	  }
         }
       }
 
@@ -136,10 +150,17 @@ void HLTInfo::analyze(const edm::Handle<edm::TriggerResults>& hltresults,
       int itdum = 0;
       for (auto & dummy : l1dummies) {
         TString trigName(dummy.data());
-        HltTree->Branch(trigName,l1flag+itdum, trigName+"/I");
-        HltTree->Branch(trigName+"_Prescl",l1Prescl+itdum,trigName+"_Prescl/I");
-        pathtoindex[dummy] = itdum;
-        ++itdum;
+	if(trigName.Contains("HLT_HIL3Mu3_v") || trigName.Contains("HLT_HIL3Mu5_v") || trigName.Contains("HLT_HIL3Mu7_v") ||
+	   trigName.Contains("HLT_HIAK4PFJet30_v")  || trigName.Contains("HLT_HIAK4PFJet40_v")  || trigName.Contains("HLT_HIAK4PFJet60_v")  || 
+	   trigName.Contains("HLT_HIAK4PFJet80_v")  || trigName.Contains("HLT_HIAK4PFJet100_v")  || 
+	   trigName.Contains("HLT_HIL3Mu3_AK4PFJet30_v") || trigName.Contains("HLT_HIL3Mu3_AK4PFJet40_v") || trigName.Contains("HLT_HIL3Mu3_AK4PFJet60_v") ||
+	   trigName.Contains("HLT_HIL3Mu5_AK4PFJet30_v") || trigName.Contains("HLT_HIL3Mu5_AK4PFJet40_v") || trigName.Contains("HLT_HIL3Mu5_AK4PFJet60_v")
+	   ){
+	  HltTree->Branch(trigName,l1flag+itdum, trigName+"/I");
+	  HltTree->Branch(trigName+"_Prescl",l1Prescl+itdum,trigName+"_Prescl/I");
+	  pathtoindex[dummy] = itdum;
+	  ++itdum;
+	}
       }
 
       int il1 = 0;
@@ -149,10 +170,17 @@ void HLTInfo::analyze(const edm::Handle<edm::TriggerResults>& hltresults,
 
         if (pathtoindex.find(l1trigName) == pathtoindex.end()) {
           TString l1TSname = l1trigName;
-          HltTree->Branch(l1TSname,l1flag+itdum+il1,l1TSname+"/I");
-          HltTree->Branch(l1TSname+"_Prescl",l1Prescl+itdum+il1,l1TSname+"_Prescl/I");
-          pathtoindex[l1trigName] = itdum + il1;
-          ++il1;
+	  if(l1TSname.Contains("HLT_HIL3Mu3_v", TString::kIgnoreCase) || l1TSname.Contains("HLT_HIL3Mu5_v", TString::kIgnoreCase) || l1TSname.Contains("HLT_HIL3Mu7_v", TString::kIgnoreCase) ||
+	     l1TSname.Contains("HLT_HIAK4PFJet30_v")  || l1TSname.Contains("HLT_HIAK4PFJet40_v")  || l1TSname.Contains("HLT_HIAK4PFJet60_v")  || 
+	     l1TSname.Contains("HLT_HIAK4PFJet80_v")  || l1TSname.Contains("HLT_HIAK4PFJet100_v")  || 
+	     l1TSname.Contains("HLT_HIL3Mu3_AK4PFJet30_v") || l1TSname.Contains("HLT_HIL3Mu3_AK4PFJet40_v") || l1TSname.Contains("HLT_HIL3Mu3_AK4PFJet60_v") ||
+	     l1TSname.Contains("HLT_HIL3Mu5_AK4PFJet30_v") || l1TSname.Contains("HLT_HIL3Mu5_AK4PFJet40_v") || l1TSname.Contains("HLT_HIL3Mu5_AK4PFJet60_v")
+	     ){
+	    HltTree->Branch(l1TSname,l1flag+itdum+il1,l1TSname+"/I");
+	    HltTree->Branch(l1TSname+"_Prescl",l1Prescl+itdum+il1,l1TSname+"_Prescl/I");
+	    pathtoindex[l1trigName] = itdum + il1;
+	    ++il1;
+	  }
         }
 
       } // end algo Map

@@ -138,13 +138,14 @@ private:
   Double_t ptMin_;
   Bool_t chargedOnly_;
   Bool_t stableOnly_;
-
+  Bool_t useRefVector_;
   // edm::InputTag src_;
   // edm::InputTag genParticleSrc_;
   // edm::InputTag genHIsrc_;
 
   edm::EDGetTokenT<edm::HepMCProduct> src_;
   edm::EDGetTokenT<reco::GenParticleCollection> genParticleSrc_;
+  edm::EDGetTokenT<reco::GenParticleRefVector> genParticleRVSrc_; 
   edm::EDGetTokenT<edm::GenHIEvent> genHIsrc_;
 
   edm::ESHandle < ParticleDataTable > pdt;
@@ -173,10 +174,12 @@ HiGenAnalyzer::HiGenAnalyzer(const edm::ParameterSet& iConfig)
   ptMin_ = iConfig.getUntrackedParameter<Double_t>("ptMin", 0);
   chargedOnly_ = iConfig.getUntrackedParameter<Bool_t>("chargedOnly", false);
   stableOnly_ = iConfig.getUntrackedParameter<Bool_t>("stableOnly", false);
+  useRefVector_ = iConfig.getUntrackedParameter<Bool_t>("useRefVector", false);
   if(useHepMCProduct_){
     src_ = consumes<edm::HepMCProduct>(iConfig.getUntrackedParameter<edm::InputTag>("src",edm::InputTag("generator")));
   } else {
     genParticleSrc_ = consumes<reco::GenParticleCollection>(iConfig.getUntrackedParameter<edm::InputTag>("genParticleSrc",edm::InputTag("hiGenParticles")));
+    genParticleRVSrc_ = consumes<reco::GenParticleRefVector>(iConfig.getUntrackedParameter<edm::InputTag>("genParticleRVSrc",edm::InputTag("hiGenParticles")));
   }
   if(doHI_){
     genHIsrc_ = consumes<edm::GenHIEvent>(iConfig.getUntrackedParameter<edm::InputTag>("genHiSrc",edm::InputTag("heavyIon")));
@@ -359,6 +362,7 @@ HiGenAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
       // 	edm::LogError("Number of genparticles exceeds array bounds.");
     }
   }else{
+    /*
     edm::Handle<reco::GenParticleCollection> parts;
     iEvent.getByToken(genParticleSrc_,parts);
     for(UInt_t i = 0; i < parts->size(); ++i){
@@ -402,20 +406,60 @@ HiGenAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
       // if(hev_.mult >= MAXPARTICLES)
       // 	edm::LogError("Number of genparticles exceeds array bounds.");
     }
-  
-    if(doHI_){
-      edm::Handle<edm::GenHIEvent> higen;
-      iEvent.getByToken(genHIsrc_,higen);
+    */
 
-      b = higen->b();
-      npart = higen->Npart();
-      ncoll = higen->Ncoll();
-      nhard = higen->Nhard();
-      phi0 = higen->evtPlane();
-
+    
+    if(useRefVector_){
+      edm::Handle<reco::GenParticleRefVector> parts;
+      iEvent.getByToken(genParticleRVSrc_,parts);
+      
+      for (reco::GenParticleRefVector::const_iterator it = parts->begin(); it != parts->end(); ++it) {
+	
+	if (stableOnly_ && (*it)->status()!=1) continue;
+	if ((*it)->pt()<ptMin_) continue;
+	if (fabs((*it)->eta())>etaMax_) continue;
+	if (chargedOnly_&&(*it)->charge()==0) continue;
+	if(fabs( (*it)->pdgId())   == 11 ) continue;
+	if(fabs( (*it)->pdgId())   == 15 ) continue;
+	
+	hev_.pt.push_back( (*it)->pt());
+	hev_.eta.push_back( (*it)->eta());
+	hev_.phi.push_back( (*it)->phi());
+	hev_.pdg.push_back( (*it)->pdgId());
+	//hev_.chg.push_back( (*it)->charge());
+	//hev_.sube.push_back( (*it)->collisionId());
+	//hev_.sta.push_back( (*it)->status());
+	++(hev_.mult);
+	
+	
+      }
     }
-  }
+    else{
+      edm::Handle<reco::GenParticleCollection> parts;
+      iEvent.getByToken(genParticleSrc_,parts);
+      
+      //for(UInt_t i = 0; i < parts->size(); ++i){
+      for(UInt_t i = 0; i < 9; ++i){
+	const reco::GenParticle& p = (*parts)[i];
+	
+	if(fabs( p.pdgId())   > 21 ) continue;
+	
+	hev_.pt.push_back( p.pt());
+	hev_.eta.push_back( p.eta());
+	hev_.phi.push_back( p.phi());
+	hev_.pdg.push_back( p.pdgId());
+	//hev_.chg.push_back( p.charge());
+	//hev_.sube.push_back( p.collisionId());
+	hev_.sta.push_back( p.status());
+	++(hev_.mult);
+	
+      }
+    }
 
+
+
+  }
+  
   if(doVertex_){
     edm::Handle<edm::SimVertexContainer> simVertices;
     // iEvent.getByType<edm::SimVertexContainer>(simVertices);
@@ -469,7 +513,8 @@ HiGenAnalyzer::beginJob()
   nt = f->make<TNtuple>("nt","Mixing Analysis","mix:np:src:sig");
 
   hydjetTree_ = f->make<TTree>("hi","Tree of Hi gen Event");
-  hydjetTree_->Branch("event",&hev_.event,"event/I");
+  //hydjetTree_->Branch("event",&hev_.event,"event/I");
+  /*
   hydjetTree_->Branch("b",&hev_.b,"b/F");
   hydjetTree_->Branch("npart",&hev_.npart,"npart/F");
   hydjetTree_->Branch("ncoll",&hev_.ncoll,"ncoll/F");
@@ -479,31 +524,31 @@ HiGenAnalyzer::beginJob()
 
   hydjetTree_->Branch("n",hev_.n,"n[3]/I");
   hydjetTree_->Branch("ptav",hev_.ptav,"ptav[3]/F");
-
+  */
   if(doParticles_){
 
     hydjetTree_->Branch("mult",&hev_.mult,"mult/I");
-    hydjetTree_->Branch("E",&hev_.E);
-    hydjetTree_->Branch("mass",&hev_.mass);
+    //hydjetTree_->Branch("E",&hev_.E);
+    //hydjetTree_->Branch("mass",&hev_.mass);
     hydjetTree_->Branch("pt",&hev_.pt);
     hydjetTree_->Branch("eta",&hev_.eta);
     hydjetTree_->Branch("phi",&hev_.phi);
     hydjetTree_->Branch("pdg",&hev_.pdg);
-    hydjetTree_->Branch("chg",&hev_.chg);
-    hydjetTree_->Branch("matchingID",&hev_.matchingID);
-    hydjetTree_->Branch("nMothers",&hev_.nMothers);
-    hydjetTree_->Branch("motherIdx",&hev_.motherIndex);
-    hydjetTree_->Branch("nDaughters",&hev_.nDaughters);
-    hydjetTree_->Branch("daughterIdx",&hev_.daughterIndex);
-    if(!stableOnly_){
-      hydjetTree_->Branch("sta",&hev_.sta);
-    }
-    hydjetTree_->Branch("sube",&hev_.sube);
-
-    hydjetTree_->Branch("vx",&hev_.vx,"vx/F");
-    hydjetTree_->Branch("vy",&hev_.vy,"vy/F");
-    hydjetTree_->Branch("vz",&hev_.vz,"vz/F");
-    hydjetTree_->Branch("vr",&hev_.vr,"vr/F");
+    //hydjetTree_->Branch("chg",&hev_.chg);
+    //hydjetTree_->Branch("matchingID",&hev_.matchingID);
+    //hydjetTree_->Branch("nMothers",&hev_.nMothers);
+    //hydjetTree_->Branch("motherIdx",&hev_.motherIndex);
+    //hydjetTree_->Branch("nDaughters",&hev_.nDaughters);
+    //hydjetTree_->Branch("daughterIdx",&hev_.daughterIndex);
+    //if(!stableOnly_){
+    if(!useRefVector_) hydjetTree_->Branch("sta",&hev_.sta);
+    //}
+    ////hydjetTree_->Branch("sube",&hev_.sube);
+    //
+    //hydjetTree_->Branch("vx",&hev_.vx,"vx/F");
+    //hydjetTree_->Branch("vy",&hev_.vy,"vy/F");
+    //hydjetTree_->Branch("vz",&hev_.vz,"vz/F");
+    //hydjetTree_->Branch("vr",&hev_.vr,"vr/F");
   }
 }
 

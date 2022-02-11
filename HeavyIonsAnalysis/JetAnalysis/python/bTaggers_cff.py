@@ -12,10 +12,7 @@ class bTaggers:
     def __init__(self,jetname,rParam,ispp,doSubjets):
         self.JetTracksAssociatorAtVertex = ak5JetTracksAssociatorAtVertex.clone()
         self.JetTracksAssociatorAtVertex.jets = cms.InputTag(jetname+"Jets")
-	if(ispp):
-		self.JetTracksAssociatorAtVertex.tracks = cms.InputTag("generalTracks")
-	else:
-        	self.JetTracksAssociatorAtVertex.tracks = cms.InputTag("hiGeneralTracks")
+        self.JetTracksAssociatorAtVertex.tracks = cms.InputTag("generalTracks")
         self.ImpactParameterTagInfos = impactParameterTagInfos.clone()
         self.ImpactParameterTagInfos.jetTracks = cms.InputTag(jetname+"JetTracksAssociatorAtVertex")
         self.PfImpactParameterTagInfos = pfImpactParameterTagInfos.clone()
@@ -34,8 +31,18 @@ class bTaggers:
         self.SecondaryVertexTagInfos.trackIPTagInfos     = cms.InputTag(jetname+"ImpactParameterTagInfos")
         self.PfInclusiveSecondaryVertexFinderTagInfos                     = pfInclusiveSecondaryVertexFinderTagInfos.clone()
         self.PfInclusiveSecondaryVertexFinderTagInfos.trackIPTagInfos     = cms.InputTag(jetname+"PfImpactParameterTagInfos")
+        self.PrimaryVertexAssociation = primaryVertexAssociation.clone(
+            jets = jetname+'Jets',
+        )
         self.PfDeepCSVTagInfos = pfDeepCSVTagInfos.clone()
         self.PfDeepCSVTagInfos.svTagInfos = cms.InputTag(jetname+"PfInclusiveSecondaryVertexFinderTagInfos")
+        self.PfDeepFlavourTagInfos = pfDeepFlavourTagInfos.clone(
+            shallow_tag_infos = jetname+"PfDeepCSVTagInfos",
+            puppi_value_map = '',
+            fallback_puppi_weight = True,
+            jets = jetname+'Jets',
+            vertex_associator = cms.InputTag(jetname+"PrimaryVertexAssociation","original")
+        )  
         self.SimpleSecondaryVertexHighEffBJetTags               = simpleSecondaryVertexHighEffBJetTags.clone()
         self.SimpleSecondaryVertexHighEffBJetTags.tagInfos      = cms.VInputTag(cms.InputTag(jetname+"SecondaryVertexTagInfos"))
         self.SimpleSecondaryVertexHighPurBJetTags               = simpleSecondaryVertexHighPurBJetTags.clone()
@@ -46,13 +53,14 @@ class bTaggers:
         self.CombinedSecondaryVertexV2BJetTags          = combinedSecondaryVertexV2BJetTags.clone()
         self.CombinedSecondaryVertexV2BJetTags.tagInfos = cms.VInputTag(cms.InputTag(jetname+"ImpactParameterTagInfos"),
                 cms.InputTag(jetname+"SecondaryVertexTagInfos"))
-        self.PfDeepCSVJetTags          = pfDeepCSVJetTags.clone()
-        self.PfDeepCSVJetTags.src = cms.InputTag(jetname+"PfDeepCSVTagInfos")
-        self.PfDeepCSVJetTags.NNConfig = cms.FileInPath('RecoBTag/Combined/data/DeepCSV_PhaseI.json')
-        self.PfDeepCSVJetTags.checkSVForDefaults = cms.bool(True)
-        self.PfDeepCSVJetTags.meanPadding = cms.bool(True)
-        self.PfDeepCSVJetTags.toAdd = cms.PSet()
-
+        self.PfDeepCSVJetTags          = pfDeepCSVJetTags.clone(
+            src = cms.InputTag(jetname+"PfDeepCSVTagInfos"),
+            NNConfig = cms.FileInPath('RecoBTag/Combined/data/DeepCSV_PhaseI.json'),
+            checkSVForDefaults = cms.bool(True),
+            meanPadding = cms.bool(True),
+            toAdd = cms.PSet(),
+        )
+        self.PfDeepFlavourJetTags = pfDeepFlavourJetTags.clone(src =jetname+"PfDeepFlavourTagInfos")
         self.SoftPFMuonsTagInfos                = softPFMuonsTagInfos.clone()
         self.SoftPFMuonsTagInfos.jets           = cms.InputTag(jetname+"Jets")
         #self.SoftPFMuonsTagInfos.primaryVertex  = cms.InputTag("offlinePrimaryVertices")
@@ -85,10 +93,7 @@ class bTaggers:
 		self.SubjetJetTracksAssociatorAtVertex = cms.EDProducer("JetTracksAssociatorExplicit",
 			jets = cms.InputTag(jetname+'Jets','SubJets')
 		)
-		if ispp:
-			self.SubjetJetTracksAssociatorAtVertex.tracks = cms.InputTag('highPurityTracks')
-		else:
-			self.SubjetJetTracksAssociatorAtVertex.tracks = cms.InputTag('highPurityTracks')
+                self.SubjetJetTracksAssociatorAtVertex.tracks = cms.InputTag('highPurityTracks')
 
 		self.CombinedSubjetSecondaryVertexV2BJetTags = combinedSecondaryVertexV2BJetTags.clone(
 			tagInfos = cms.VInputTag(cms.InputTag(jetname+"SubjetImpactParameterTagInfos"),
@@ -118,9 +123,10 @@ class bTaggers:
                                           * self.PfInclusiveSecondaryVertexFinderTagInfos
                                           * self.PfDeepCSVTagInfos
                                           * self.PfDeepCSVJetTags
+                                          * self.PrimaryVertexAssociation
+                                          * self.PfDeepFlavourTagInfos
+                                          * self.PfDeepFlavourJetTags
                 )
-
-
 
         self.JetBtaggingMu = cms.Sequence(self.SoftPFMuonsTagInfos 
                                           * (self.SoftPFMuonBJetTags +
@@ -156,9 +162,9 @@ class bTaggers:
             )
 
 	if doSubjets:
-		self.PatJetFlavourAssociation.jets="ak4PFJets"
-		self.PatJetFlavourAssociation.groomedJets = cms.InputTag(jetname+'Jets')
-		self.PatJetFlavourAssociation.subjets = cms.InputTag(jetname+'Jets', 'SubJets')
+            self.PatJetFlavourAssociation.jets="ak4PFJets"
+            self.PatJetFlavourAssociation.groomedJets = cms.InputTag(jetname+'Jets')
+            self.PatJetFlavourAssociation.subjets = cms.InputTag(jetname+'Jets', 'SubJets')
 
         self.PatJetFlavourId               = cms.Sequence(self.PatJetPartons*self.PatJetFlavourAssociation)
         #self.match   = patJetGenJetMatch.clone(

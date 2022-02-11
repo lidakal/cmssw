@@ -26,13 +26,12 @@ process.HiForest.HiForestVersion = cms.string(version)
 
 process.source = cms.Source("PoolSource",
     fileNames = cms.untracked.vstring(
-	'file:/afs/cern.ch/work/r/rbi/public/forest/RunIIpp5Spring18DR_DYJetsToLL_MLL-50_TuneCP5_5020GeV-amcatnloFXFX-pythia8_AODSIM.root'
-    )
+	'/store/himc/RunIIpp5Spring18DR/QCD_pThat-15_bJet_TuneCP5_5p02TeV_pythia8/AODSIM/94X_mc2017_realistic_forppRef5TeV_v1-v1/230000/00D396CF-878A-E911-88E8-14187741278B.root'
+    ),
 )
 
 # Number of events we want to process, -1 = all events
-process.maxEvents = cms.untracked.PSet(
-    input = cms.untracked.int32(8))
+process.maxEvents = cms.untracked.PSet(input = cms.untracked.int32(100))
 
 #####################################################################################
 # Load Global Tag, Geometry, etc.
@@ -97,7 +96,25 @@ process.load('HeavyIonsAnalysis.EventAnalysis.l1object_cfi')
 process.load('HeavyIonsAnalysis.JetAnalysis.HiGenAnalyzer_cfi')
 process.HiGenParticleAna.genParticleSrc = cms.untracked.InputTag("genParticles")
 process.HiGenParticleAna.doHI = False
-
+process.HiGenParticleAna.etaMax = cms.untracked.double(2.5) # default is 2 
+process.HiGenParticleAna.stableOnly = False
+process.HiGenParticleAna.useRefVector = cms.untracked.bool(True)
+process.bHadronAna = process.HiGenParticleAna.clone(
+    genParticleRVSrc = cms.untracked.InputTag("ak4PFPatJetPartons","bHadrons")
+)
+process.cHadronAna = process.HiGenParticleAna.clone(
+    genParticleRVSrc = cms.untracked.InputTag("ak4PFPatJetPartons","cHadrons")
+)
+process.leptonAna = process.HiGenParticleAna.clone(
+    genParticleRVSrc = cms.untracked.InputTag("ak4PFPatJetPartons","leptons")
+)
+process.outgoingPartonAna = process.HiGenParticleAna.clone(
+    genParticleRVSrc = cms.untracked.InputTag("ak4PFPatJetPartons","algorithmicPartons")
+)
+process.incomingPartonAna = process.HiGenParticleAna.clone(
+    genParticleSrc = cms.untracked.InputTag("genParticles"),
+    useRefVector = cms.untracked.bool(False)
+)
 process.load('HeavyIonsAnalysis.EventAnalysis.runanalyzer_cff')
 
 process.load("HeavyIonsAnalysis.JetAnalysis.pfcandAnalyzer_pp_cfi")
@@ -147,6 +164,8 @@ for idmod in my_id_modules:
 
 #####################################################################################
 
+
+
 #########################
 # Main analysis list
 #########################
@@ -154,22 +173,42 @@ for idmod in my_id_modules:
 process.ana_step = cms.Path(
     process.hltanalysis *
     process.hiEvtAnalyzer *
-    process.hltobject +
+    #process.hltobject +
     # process.l1object +
-    process.HiGenParticleAna*
+    #process.HiGenParticleAna*
     process.genJetSequence +
     process.jetSequence +
+    process.bHadronAna +
+    process.cHadronAna +
+    #process.leptonAna +
+    #process.outgoingPartonAna + 
+    process.incomingPartonAna + 
     # Should be added in the path for VID module
     # process.egmGsfElectronIDSequence +
-    process.ggHiNtuplizer +
-    process.ggHiNtuplizerGED +
-    process.pfcandAnalyzer +
+    #process.ggHiNtuplizer +
+    #process.ggHiNtuplizerGED +
+    #process.pfcandAnalyzer +
     process.HiForest +
-    process.trackSequencesPP +
+    #process.trackSequencesPP +
     process.runAnalyzer
 )
 
 #####################################################################################
+'''
+# edm output for debugging purposes
+process.output = cms.OutputModule(
+    "PoolOutputModule",
+    fileName = cms.untracked.string('HiForestEDM.root'),
+    outputCommands = cms.untracked.vstring(
+        'keep *',
+        # drop aliased products
+        'drop *_akULPu3PFJets_*_*',
+        'drop *_akULPu4PFJets_*_*',
+        )
+    )
+
+process.output_path = cms.EndPath(process.output)
+'''
 
 #########################
 # Event Selection
@@ -210,3 +249,19 @@ process.pVertexFilterCutEandG = cms.Path(process.pileupVertexFilterCutEandG)
 process.pAna = cms.EndPath(process.skimanalysis)
 
 # Customization
+
+process.load("RecoHI.HiJetAlgos.dynGroomedGenJets_cfi")
+process.load("RecoHI.HiJetAlgos.dynGroomedPFJets_cfi")
+
+process.dynGroomedGenJets.doLateSD = True
+process.dynGroomedPFJets.doLateSD = True
+
+process.genJetSequence.replace(process.akSoftDrop4GenJets, process.dynGroomedGenJets)
+process.jetSequence.replace(process.akSoftDrop4PFJets, process.dynGroomedPFJets)
+
+from Configuration.Applications.ConfigBuilder import MassReplaceInputTag
+MassReplaceInputTag(process, new="dynGroomedGenJets", old="akSoftDrop4GenJets")
+MassReplaceInputTag(process, new="dynGroomedPFJets", old="akSoftDrop4PFJets")
+MassReplaceInputTag(process, new="dynGroomedPFJets:SubJets", old="akSoftDrop4PFJets:SubJets")
+
+

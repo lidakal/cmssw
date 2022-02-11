@@ -2,6 +2,7 @@ import FWCore.ParameterSet.Config as cms
 
 inclusiveJetAnalyzer = cms.EDAnalyzer("HiInclusiveJetAnalyzer",
                                       jetTag = cms.InputTag("icPu5patJets"),
+                                      subJetTag = cms.InputTag("ak4PFpatSubJetsWithBtagging"),
                                       jetPtMin = cms.double(5.0),
                                       matchTag = cms.untracked.InputTag("akPu3PFpatJets"),
                                       genjetTag = cms.InputTag("iterativeCone5HiGenJets"),
@@ -19,7 +20,9 @@ inclusiveJetAnalyzer = cms.EDAnalyzer("HiInclusiveJetAnalyzer",
                                       doSubJets = cms.untracked.bool(False),
                                       doJetConstituents = cms.untracked.bool(False),
 				      doWTARecluster = cms.untracked.bool(False),
-                                      doHiJetID = cms.untracked.bool(True),
+                                      doHiJetID = cms.untracked.bool(False),
                                       doStandardJetID = cms.untracked.bool(False),
                                       doSubEvent = cms.untracked.bool(False),
+                                      partonjetTag = cms.InputTag("ak4PartonJets"),
+                                      groomedPartonJets = cms.InputTag("akSoftDrop4PartonJets")
                                       )
