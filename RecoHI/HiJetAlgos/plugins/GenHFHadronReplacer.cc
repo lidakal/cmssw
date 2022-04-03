@@ -79,6 +79,7 @@ void GenHFHadronReplacer::produce(edm::StreamID, edm::Event &evt, const edm::Eve
   auto outputCollection = std::make_unique<reco::GenParticleCollection>();
 
   for (const reco::GenParticle& genPart : *genParticles) {
+
     if(isFinalB(genPart)){
       //std::cout<<" b hadron = "<<genPart.pt()<<" "<<genPart.eta()<<" "<<genPart.phi()<<" "<<genPart.mass()<<" "<<genPart.status()<<" "<<genPart.px()<<" "<<genPart.p()<<std::endl;
       reco::Candidate::PolarLorentzVector chargedB(0.,0.,0.,0.);
@@ -93,8 +94,10 @@ void GenHFHadronReplacer::produce(edm::StreamID, edm::Event &evt, const edm::Eve
       outputCollection->push_back(newGenNeutral);
     }
     if(genPart.status()!=1) continue;
-    if(isFromB(genPart)) continue;
-    outputCollection->push_back(reco::GenParticle(genPart.charge(), genPart.p4(), genPart.vertex(), genPart.pdgId(), genPart.status(), true));
+    int statusHack = 1;  // store b-hadron children in status = 2
+    if(isFromB(genPart)) statusHack = 2;
+    //if(statusHack == 2) std::cout<<" from a b  = "<<genPart.pt()<<" "<<genPart.eta()<<" "<<genPart.phi()<<" "<<genPart.pdgId()<<" "<<genPart.status()<<std::endl;
+    outputCollection->push_back(reco::GenParticle(genPart.charge(), genPart.p4(), genPart.vertex(), genPart.pdgId(), statusHack, true));
   }
   
   evt.put(std::move(outputCollection));
@@ -116,13 +119,24 @@ bool GenHFHadronReplacer::isFinalB( const reco::Candidate &particle) const{
 
 bool GenHFHadronReplacer::isFromB( const reco::Candidate &particle) const{
 
+  bool fromB = false;
+
   unsigned int npart=particle.numberOfMothers();
   for (size_t i = 0; i < npart; ++i) {
     const reco::Candidate &mom = *particle.mother(i);
-    if (CandMCTagUtils::hasBottom(mom)) return true;
-    isFromB(mom);
+    if (CandMCTagUtils::hasBottom(mom)){
+      if(isFinalB(mom)){
+	fromB = true;
+	break;
+      }
+      else{
+	fromB = false;
+	break;	
+      }
+    }
+    else fromB = isFromB(mom);
   }
-  return false;
+  return fromB;
 }
 
 void GenHFHadronReplacer::visible
@@ -146,7 +160,7 @@ void GenHFHadronReplacer::visible
       vTemp.SetPhi(particle.daughter(i)->phi());
       vTemp.SetM(particle.daughter(i)->mass());
       v+=vTemp;
-
+      //std::cout<<" adding a particle:  pt= "<<particle.daughter(i)->pt()<<" pdg id "<<particle.daughter(i)->pdgId()<<std::endl;
     }
     else{
       visible(v,*particle.daughter(i),doCharge);

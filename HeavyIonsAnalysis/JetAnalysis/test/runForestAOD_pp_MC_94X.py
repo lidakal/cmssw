@@ -32,7 +32,7 @@ process.source = cms.Source("PoolSource",
 )
 
 # Number of events we want to process, -1 = all events
-process.maxEvents = cms.untracked.PSet(input = cms.untracked.int32(10))
+process.maxEvents = cms.untracked.PSet(input = cms.untracked.int32(1))
 
 #####################################################################################
 # Load Global Tag, Geometry, etc.
@@ -117,8 +117,16 @@ process.outgoingPartonAna = process.bHadronAna.clone(
 )
 process.incomingPartonAna = process.bHadronAna.clone(
     genParticleSrc = cms.untracked.InputTag("genParticles"),
-    useRefVector = cms.untracked.bool(False)
+    useRefVector = cms.untracked.bool(False),
+    partonMEOnly = cms.untracked.bool(True)
 )
+
+process.bDecayAna = process.incomingPartonAna.clone(
+    genParticleSrc = cms.untracked.InputTag("GenHFHadronReplacer"),
+    partonMEOnly = False,
+    chargedOnly = True
+)
+
 process.load('HeavyIonsAnalysis.EventAnalysis.runanalyzer_cff')
 
 process.load("HeavyIonsAnalysis.JetAnalysis.pfcandAnalyzer_pp_cfi")
@@ -186,6 +194,7 @@ process.ana_step = cms.Path(
     #process.leptonAna +
     #process.outgoingPartonAna + 
     process.incomingPartonAna + 
+    #process.bDecayAna + 
     # Should be added in the path for VID module
     # process.egmGsfElectronIDSequence +
     #process.ggHiNtuplizer +

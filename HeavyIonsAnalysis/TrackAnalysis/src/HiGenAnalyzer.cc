@@ -138,6 +138,7 @@ private:
   Double_t ptMin_;
   Bool_t chargedOnly_;
   Bool_t stableOnly_;
+  Bool_t partonMEOnly_;
   Bool_t useRefVector_;
   // edm::InputTag src_;
   // edm::InputTag genParticleSrc_;
@@ -174,6 +175,7 @@ HiGenAnalyzer::HiGenAnalyzer(const edm::ParameterSet& iConfig)
   ptMin_ = iConfig.getUntrackedParameter<Double_t>("ptMin", 0);
   chargedOnly_ = iConfig.getUntrackedParameter<Bool_t>("chargedOnly", false);
   stableOnly_ = iConfig.getUntrackedParameter<Bool_t>("stableOnly", false);
+  partonMEOnly_ = iConfig.getUntrackedParameter<Bool_t>("partonMEOnly", false);
   useRefVector_ = iConfig.getUntrackedParameter<Bool_t>("useRefVector", false);
   if(useHepMCProduct_){
     src_ = consumes<edm::HepMCProduct>(iConfig.getUntrackedParameter<edm::InputTag>("src",edm::InputTag("generator")));
@@ -438,11 +440,13 @@ HiGenAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
       edm::Handle<reco::GenParticleCollection> parts;
       iEvent.getByToken(genParticleSrc_,parts);
       
-      //for(UInt_t i = 0; i < parts->size(); ++i){
-	for(UInt_t i = 0; i < 9; ++i){
+      for(UInt_t i = 0; i < parts->size(); ++i){
+	//for(UInt_t i = 0; i < 9; ++i){
+	if(partonMEOnly_ && i>=9) break; 
 	const reco::GenParticle& p = (*parts)[i];
-	
-	if(fabs( p.pdgId())   > 21 ) continue;
+	if(chargedOnly_ && p.charge() ==0) continue;
+
+	if(partonMEOnly_ && fabs( p.pdgId())   > 21 ) continue;
 	
 	hev_.pt.push_back( p.pt());
 	hev_.eta.push_back( p.eta());

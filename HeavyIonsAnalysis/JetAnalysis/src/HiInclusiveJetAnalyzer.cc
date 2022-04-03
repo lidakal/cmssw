@@ -251,6 +251,11 @@ HiInclusiveJetAnalyzer::beginJob() {
     t->Branch("svtxm",    &jets_.svtxm);
     t->Branch("svtxpt",   &jets_.svtxpt);
     t->Branch("svtxmcorr", &jets_.svtxmcorr);
+
+    t->Branch("svtxTrPt",   &jets_.svtxTrPt);
+    t->Branch("svtxTrEta",   &jets_.svtxTrEta);
+    t->Branch("svtxTrPhi",   &jets_.svtxTrPhi);
+
   }
 
 
@@ -389,7 +394,7 @@ HiInclusiveJetAnalyzer::analyze(const Event& iEvent,
 	jets_.nsvtx[jets_.nref]     = svTagInfo->nVertices();
 		
 	std::vector<int> svtxntrks;
-	std::vector<float> svjetDr, svtxdl, svtxdls, svtxdl2d, svtxdls2d, svtxm, svtxmcorr, svtxpt;
+	std::vector<float> svjetDr, svtxdl, svtxdls, svtxdl2d, svtxdls2d, svtxm, svtxmcorr, svtxpt, svtxTrPt, svtxTrEta, svtxTrPhi;
 	std::vector<int> svType;
 	if(jets_.nsvtx[jets_.nref]==0){
 		svtxntrks.push_back(-1);
@@ -401,7 +406,11 @@ HiInclusiveJetAnalyzer::analyze(const Event& iEvent,
 		svtxmcorr.push_back(-10);
 		svtxpt.push_back(-1);	
 		svType.push_back(-9);
+		svtxTrPt.push_back(-1);
+		svtxTrEta.push_back(-1);
+		svtxTrPhi.push_back(-1);
 	}
+
 	for (int ivtx=0; ivtx<jets_.nsvtx[jets_.nref]; ivtx++) {
 	  svtxntrks.push_back(svTagInfo->nVertexTracks(ivtx));
 	  svjetDr.push_back(deltaR(svTagInfo->flightDirection(ivtx),jetDir));
@@ -427,6 +436,14 @@ HiInclusiveJetAnalyzer::analyze(const Event& iEvent,
 	  sinth = sqrt(sinth);
 	  svtxmcorr.push_back(sqrt(pow(svtxM,2)+(pow(svtxPt,2)*pow(sinth,2)))+svtxPt*sinth);
 
+	  std::vector<edm::Ptr<reco::Candidate> > svtxTracks = svTagInfo->vertexTracks(ivtx);
+	  for(unsigned int itrk=0; itrk<svtxTracks.size(); itrk++){
+	    svtxTrPt.push_back(svtxTracks.at(itrk)->pt());
+	    svtxTrEta.push_back(svtxTracks.at(itrk)->eta());
+	    svtxTrPhi.push_back(svtxTracks.at(itrk)->phi());
+	  }
+
+
 	}
 	jets_.svtxntrk.push_back(svtxntrks);
         jets_.svJetDeltaR.push_back(svjetDr);
@@ -437,11 +454,13 @@ HiInclusiveJetAnalyzer::analyze(const Event& iEvent,
         jets_.svtxm.push_back(svtxm);
         jets_.svtxmcorr.push_back(svtxmcorr);
         jets_.svtxpt.push_back(svtxpt);
-
+	jets_.svtxTrPt.push_back(svtxTrPt);
+	jets_.svtxTrEta.push_back(svtxTrEta);
+	jets_.svtxTrPhi.push_back(svtxTrPhi);
       }
 
     }
-
+  
     if(doHiJetID_){
       // Jet ID variables
 

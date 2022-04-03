@@ -256,7 +256,7 @@ void InputGenJetsParticleSelector::visible
   //return v;
 }
 
-
+/*
 bool InputGenJetsParticleSelector::isFromB
 (
  const reco::Candidate *particle) const
@@ -268,8 +268,55 @@ bool InputGenJetsParticleSelector::isFromB
   }    
   return false;
 }
+*/
+bool InputGenJetsParticleSelector::isFromB( const reco::Candidate *particle) const{
+
+  bool fromB = false;
+
+  unsigned int npart=particle->numberOfMothers();
+  for (size_t i = 0; i < npart; ++i) {
+    const reco::Candidate *mom = particle->mother(i);
+    if (CandMCTagUtils::hasBottom(*mom)){
+      if(isFinalB(mom)){
+        fromB = true;
+        break;
+      }
+      else{
+        fromB = false;
+        break;
+      }
+    }
+    else fromB = isFromB(mom);
+  }
+  return fromB;
+}
 
 
+
+bool InputGenJetsParticleSelector::isFromC( const reco::Candidate *particle) const{
+
+  bool fromC = false;
+
+  unsigned int npart=particle->numberOfMothers();
+  for (size_t i = 0; i < npart; ++i) {
+    const reco::Candidate *mom = particle->mother(i);
+    if (CandMCTagUtils::hasCharm(*mom)){
+      if(isFinalC(mom)){
+        fromC = true;
+        break;
+      }
+      else{
+        fromC = false;
+        break;
+      }
+    }
+    else fromC = isFromC(mom);
+  }
+  return fromC;
+}
+
+
+/*
 bool InputGenJetsParticleSelector::isFromC
 (
  const reco::Candidate *particle) const
@@ -281,7 +328,7 @@ bool InputGenJetsParticleSelector::isFromC
   }  
   return false;
 }
-
+*/
 
 
 
@@ -384,6 +431,7 @@ void InputGenJetsParticleSelector::produce (edm::StreamID, edm::Event &evt, cons
 	//cout<<" vis  mass "<<sqrt(vis.E()*vis.E()-vis.P()*vis.P())<<endl;
 	//cout<<" nC "<<nC<<endl;
 	selected[i] = true;
+	//std::cout<<" final B "<<particle->pt()<<" "<<particle->pdgId()<<std::endl;
       }
       else if(isFinalC(particle)){
 	selected[i] = true;
@@ -391,8 +439,15 @@ void InputGenJetsParticleSelector::produce (edm::StreamID, edm::Event &evt, cons
     }
 
     if (!partonicFinalState && particle->status() == 1){ // selecting stable particles
-      if(undecayHF && isFromC(particle)) selected[i] = false;
-      else if(undecayHF && isFromB(particle))selected[i] = false;
+
+      if(undecayHF && isFromC(particle)) {
+	selected[i] = false;
+	//std::cout<<" is from C "<<particle->pt()<<" "<<particle->pdgId()<<std::endl;
+      }
+      else if(undecayHF && isFromB(particle)){
+	selected[i] = false;
+	//std::cout<<" is from B "<<particle->pt()<<" "<<particle->pdgId()<<std::endl;
+      }
       else if(!chargedOnly || abs(particle->charge()) == 1) selected[i] = true;
     }
 

@@ -281,6 +281,11 @@ private:
     std::vector<std::vector<float> >svtxpt;
     std::vector<std::vector<float> >svJetDeltaR;
 
+    std::vector<std::vector<float> >svtxTrPt;
+    std::vector<std::vector<float> >svtxTrEta;
+    std::vector<std::vector<float> >svtxTrPhi;
+
+
     float mue[MAXJETS];
     float mupt[MAXJETS];
     float mueta[MAXJETS];
