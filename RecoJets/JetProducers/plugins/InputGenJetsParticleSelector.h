@@ -23,7 +23,7 @@
 #include "FWCore/Framework/interface/global/EDProducer.h"
 #include "DataFormats/Common/interface/EDProductfwd.h"
 #include "FWCore/ParameterSet/interface/ParameterSet.h"
-
+#include "TLorentzVector.h"
 
 class InputGenJetsParticleSelector : public edm::global::EDProducer<> {
   // collection type
@@ -58,6 +58,11 @@ class InputGenJetsParticleSelector : public edm::global::EDProducer<> {
   bool hasPartonChildren(ParticleBitmap &invalid,
 			 const ParticleVector &p,
 			 const reco::Candidate *particle) const;
+  bool isFinalB( const reco::Candidate *particle) const;
+  bool isFinalC( const reco::Candidate *particle) const;
+  bool isFromB( const reco::Candidate *particle) const;
+  bool isFromC( const reco::Candidate *particle) const;
+  void visible( TLorentzVector &v, const reco::Candidate *particle) const;
   
   enum ResonanceState {
     kNo = 0,
@@ -90,6 +95,8 @@ class InputGenJetsParticleSelector : public edm::global::EDProducer<> {
   bool			partonicFinalState;
   bool			excludeResonances;
   bool			tausAsJets;
+  bool			undecayHF;
+  bool			chargedOnly;
   bool			isMiniAOD;
   double		ptMin;
   

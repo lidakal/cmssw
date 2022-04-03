@@ -44,6 +44,8 @@
 #include <memory>
 #include "CommonTools/CandUtils/interface/pdgIdUtils.h"
 
+#include "PhysicsTools/JetMCUtils/interface/CandMCTag.h"
+
 using namespace std;
 
 InputGenJetsParticleSelector::InputGenJetsParticleSelector(const edm::ParameterSet &params ):
@@ -52,6 +54,8 @@ InputGenJetsParticleSelector::InputGenJetsParticleSelector(const edm::ParameterS
   partonicFinalState(params.getParameter<bool>("partonicFinalState")),
   excludeResonances(params.getParameter<bool>("excludeResonances")),
   tausAsJets(params.getParameter<bool>("tausAsJets")),
+  undecayHF(params.getParameter<bool>("undecayHF")),
+  chargedOnly(params.getParameter<bool>("chargedOnly")),
   ptMin(0.0){
   if (params.exists("ignoreParticleIDs"))
     setIgnoredParticles(params.getParameter<std::vector<unsigned int> >
@@ -185,6 +189,103 @@ int InputGenJetsParticleSelector::testPartonChildren
   return 0;
 }
 
+
+bool InputGenJetsParticleSelector::isFinalB
+(
+ const reco::Candidate *particle) const
+{
+
+  if (!CandMCTagUtils::hasBottom(*particle) ) return false;
+
+  // check if any of the daughters is also a b hadron
+    unsigned int npart=particle->numberOfDaughters();
+    
+    for (size_t i = 0; i < npart; ++i) {
+      if (CandMCTagUtils::hasBottom(*particle->daughter(i))) return false;
+    }
+    
+    return true;
+}
+
+
+bool InputGenJetsParticleSelector::isFinalC
+(
+ const reco::Candidate *particle) const
+{
+
+  if (!CandMCTagUtils::hasCharm(*particle) ) return false;
+
+  // check if any of the daughters is also a b hadron
+    unsigned int npart=particle->numberOfDaughters();
+    
+    for (size_t i = 0; i < npart; ++i) {
+      if (CandMCTagUtils::hasCharm(*particle->daughter(i))) return false;
+    }
+    
+    return true;
+}
+
+
+void InputGenJetsParticleSelector::visible
+(
+ TLorentzVector &v, const reco::Candidate *particle) const
+{
+
+  //TLorentzVector vis(0.,0.,0.,0.);
+  //int nCharge = 0;
+
+  unsigned int npart=particle->numberOfDaughters();
+  
+  for (size_t i = 0; i < npart; ++i) {
+    //if (particle->daughter(i)->charge() == 1) nCharge++;
+    //nCharge+= visible(particle->daughter(i));
+    if(particle->daughter(i)->status()==1){
+      TLorentzVector vTemp(0.,0.,0.,0.);
+      vTemp.SetPx(particle->daughter(i)->px());
+      vTemp.SetPy(particle->daughter(i)->py());
+      vTemp.SetPz(particle->daughter(i)->pz());
+      vTemp.SetE(particle->daughter(i)->energy());
+      v+=vTemp;
+    }
+    else{
+      visible(v,particle->daughter(i));
+    }
+  }
+  
+  //return nCharge;
+  //return v;
+}
+
+
+bool InputGenJetsParticleSelector::isFromB
+(
+ const reco::Candidate *particle) const
+{
+  unsigned int npart=particle->numberOfMothers();  
+  for (size_t i = 0; i < npart; ++i) {
+    if (CandMCTagUtils::hasBottom(*particle->mother(i))) return true;
+    isFromB(particle->mother(i));
+  }    
+  return false;
+}
+
+
+bool InputGenJetsParticleSelector::isFromC
+(
+ const reco::Candidate *particle) const
+{
+  unsigned int npart=particle->numberOfMothers();  
+  for (size_t i = 0; i < npart; ++i) {
+    if (CandMCTagUtils::hasCharm(*particle->mother(i))) return true;
+    isFromC(particle->mother(i));
+  }  
+  return false;
+}
+
+
+
+
+
 InputGenJetsParticleSelector::ResonanceState
 InputGenJetsParticleSelector::fromResonance(ParticleBitmap &invalid,
 							   const ParticleVector &p,
@@ -275,20 +376,44 @@ void InputGenJetsParticleSelector::produce (edm::StreamID, edm::Event &evt, cons
     const reco::Candidate *particle = particles[i];
     if (invalid[i])
       continue;
-    if (particle->status() == 1) // selecting stable particles
-      selected[i] = true;
+
+    if(undecayHF){
+      if(isFinalB(particle)){
+	//TLorentzVector vis(0.,0.,0.,0.);
+        //visible(vis, particle);
+	//cout<<" vis  mass "<<sqrt(vis.E()*vis.E()-vis.P()*vis.P())<<endl;
+	//cout<<" nC "<<nC<<endl;
+	selected[i] = true;
+      }
+      else if(isFinalC(particle)){
+	selected[i] = true;
+      }
+    }
+
+    if (!partonicFinalState && particle->status() == 1){ // selecting stable particles
+      if(undecayHF && isFromC(particle)) selected[i] = false;
+      else if(undecayHF && isFromB(particle))selected[i] = false;
+      else if(!chargedOnly || abs(particle->charge()) == 1) selected[i] = true;
+    }
+
     if (partonicFinalState && isParton(particle->pdgId())) {
-	  
+      if (particle->status() > 70 && particle->status() < 80) {
+        selected[i] = true;
+        invalidateTree(invalid, particles,particle); //this?!?                                                
+      }
+      
+
+      /*
       if (particle->numberOfDaughters()==0 &&
 	  particle->status() != 1) {
 	// some brokenness in event...
 	invalid[i] = true;
       }
-      else if (!hasPartonChildren(invalid, particles,
-				  particle)) {
+      else if (!hasPartonChildren(invalid, particles,particle)) {
 	selected[i] = true;
 	invalidateTree(invalid, particles,particle); //this?!?
       }
+      */
     }
 	
   }

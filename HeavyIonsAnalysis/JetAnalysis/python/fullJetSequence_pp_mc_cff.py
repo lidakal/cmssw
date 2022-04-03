@@ -4,12 +4,17 @@ from HeavyIonsAnalysis.JetAnalysis.rerecoGen_cff import *
 from HeavyIonsAnalysis.JetAnalysis.rerecoJets_cff import *
 from HeavyIonsAnalysis.JetAnalysis.rerecoTracks_cff import *
 
+from PhysicsTools.JetMCAlgos.HadronAndPartonSelector_cfi import *
 #from HeavyIonsAnalysis.JetAnalysis.jets.ak4CaloJetSequence_pp_mc_cff import *
-
 #from HeavyIonsAnalysis.JetAnalysis.jets.ak3PFJetSequence_pp_mc_cff import *
 from HeavyIonsAnalysis.JetAnalysis.jets.ak4PFSubJetSequence_pp_mc_cff import *
 #from HeavyIonsAnalysis.JetAnalysis.jets.ak5PFJetSequence_pp_mc_cff import *
 #from HeavyIonsAnalysis.JetAnalysis.jets.akSoftDrop4PFJetSequence_pp_mc_cff import *
+from PhysicsTools.JetMCAlgos.AK4PFJetsMCFlavourInfos_cfi import ak4JetFlavourInfos
+ak4GenJetFlavourInfos = ak4JetFlavourInfos.clone(jets = 'ak4GenJets')
+from PhysicsTools.JetMCAlgos.GenHFHadronMatcher_cff import *
+matchGenBHadron.jetFlavourInfos = 'ak4GenJetFlavourInfos'
+
 
 genParticlesForJets.ignoreParticleIDs += [12,14,16]
 genPartonsForJets = genParticlesForJets.clone(partonicFinalState = True)
@@ -20,10 +25,13 @@ ak4PartonJets = ak4GenJets.clone(src = 'genPartonsForJets')
 akSoftDrop4PartonJets = akSoftDrop4GenJets.clone(src = 'genPartonsForJets')
 
 genJetSequence = cms.Sequence(
+    selectedHadronsAndPartons + 
     genParticlesForJets +
     genPartonsForJets +
     #ak3GenJets +
     ak4GenJets +  # need to be reclustered to drop nu's
+    #ak4GenJetFlavourInfos + 
+    #matchGenBHadron +
     ak4PartonJets + 
     akSoftDrop4GenJets +
     akSoftDrop4PartonJets #+
@@ -33,7 +41,6 @@ genJetSequence = cms.Sequence(
 
 jetSequence = cms.Sequence(
     # ak4CaloJets +
-
     #ak3PFJets +
     # ak4PFJets +
     akSoftDrop4PFJets +
@@ -41,6 +48,5 @@ jetSequence = cms.Sequence(
     ak4PFJetSequence #+
     #akSoftDrop4PFJetSequence 
    #ak4CaloJetSequence +
-
     #ak3PFJetSequence +
 )

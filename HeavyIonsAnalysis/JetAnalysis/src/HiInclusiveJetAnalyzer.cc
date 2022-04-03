@@ -131,11 +131,13 @@ HiInclusiveJetAnalyzer::beginJob() {
     t->Branch("jtphiG",jets_.jtphiG,"jtphiG[nref]/F");
     */
     t->Branch("jtIsHardest",jets_.jtIsHardest,"jtIsHardest[nref]/O");
+    t->Branch("sjt1E",jets_.sjt1E,"sjt1E[nref]/F");
     t->Branch("sjt1Pt",jets_.sjt1Pt,"sjt1Pt[nref]/F");
     t->Branch("sjt1Eta",jets_.sjt1Eta,"sjt1Eta[nref]/F");
     t->Branch("sjt1Phi",jets_.sjt1Phi,"sjt1Phi[nref]/F");
     t->Branch("sjt1HadFlav",jets_.sjt1HadFlav,"sjt1HadFlav[nref]/F");
     t->Branch("sjt1ParFlav",jets_.sjt1ParFlav,"sjt1HadFlav[nref]/F");
+    t->Branch("sjt2E",jets_.sjt2E,"sjt2E[nref]/F");
     t->Branch("sjt2Pt",jets_.sjt2Pt,"sjt2Pt[nref]/F");
     t->Branch("sjt2Eta",jets_.sjt2Eta,"sjt2Eta[nref]/F");
     t->Branch("sjt2Phi",jets_.sjt2Phi,"sjt2Phi[nref]/F");
@@ -149,9 +151,11 @@ HiInclusiveJetAnalyzer::beginJob() {
     t->Branch("sjt2DiscDeepCSVBB",jets_.sjt2DiscDeepCSVBB,"sjt2DiscDeepCSVBB[nref]/F");
     t->Branch("sjt2DiscDeepCSVC",jets_.sjt2DiscDeepCSVC,"sjt2DiscDeepCSVC[nref]/F");
     */
+    t->Branch("rsjt1E",jets_.rsjt1E,"rsjt1E[nref]/F");
     t->Branch("rsjt1Pt",jets_.rsjt1Pt,"rsjt1Pt[nref]/F");
     t->Branch("rsjt1Eta",jets_.rsjt1Eta,"rsjt1Eta[nref]/F");
     t->Branch("rsjt1Phi",jets_.rsjt1Phi,"rsjt1Phi[nref]/F");
+    t->Branch("rsjt2E",jets_.rsjt2E,"rsjt2E[nref]/F");
     t->Branch("rsjt2Pt",jets_.rsjt2Pt,"rsjt2Pt[nref]/F");
     t->Branch("rsjt2Eta",jets_.rsjt2Eta,"rsjt2Eta[nref]/F");
     t->Branch("rsjt2Phi",jets_.rsjt2Phi,"rsjt2Phi[nref]/F");
@@ -295,6 +299,7 @@ HiInclusiveJetAnalyzer::beginJob() {
         t->Branch("genetaG",jets_.genetaG,"genetaG[ngen]/F");
         t->Branch("genphiG",jets_.genphiG,"genphiG[ngen]/F");
 	*/
+	t->Branch("gsjt1E",jets_.gsjt1E,"gsjt1E[ngen]/F");
 	t->Branch("gsjt1Pt",jets_.gsjt1Pt,"gsjt1Pt[ngen]/F");
 	t->Branch("gsjt1Eta",jets_.gsjt1Eta,"gsjt1Eta[ngen]/F");
 	t->Branch("gsjt1Phi",jets_.gsjt1Phi,"gsjt1Phi[ngen]/F");
@@ -306,12 +311,13 @@ HiInclusiveJetAnalyzer::beginJob() {
         t->Branch("paretaG",jets_.paretaG,"paretaG[npar]/F");
         t->Branch("parphiG",jets_.parphiG,"parphiG[npar]/F");
 	*/
-	t->Branch("psjt1Pt",jets_.psjt1Pt,"psjt1Pt[ngen]/F");
-	t->Branch("psjt1Eta",jets_.psjt1Eta,"psjt1Eta[ngen]/F");
-	t->Branch("psjt1Phi",jets_.psjt1Phi,"psjt1Phi[ngen]/F");
-	t->Branch("psjt2Pt",jets_.psjt2Pt,"psjt2Pt[ngen]/F");
-	t->Branch("psjt2Eta",jets_.psjt2Eta,"psjt2Eta[ngen]/F");
-	t->Branch("psjt2Phi",jets_.psjt2Phi,"psjt2Phi[ngen]/F");
+	t->Branch("psjt1E",jets_.psjt1E,"psjt1E[npar]/F");
+	t->Branch("psjt1Pt",jets_.psjt1Pt,"psjt1Pt[npar]/F");
+	t->Branch("psjt1Eta",jets_.psjt1Eta,"psjt1Eta[npar]/F");
+	t->Branch("psjt1Phi",jets_.psjt1Phi,"psjt1Phi[npar]/F");
+	t->Branch("psjt2Pt",jets_.psjt2Pt,"psjt2Pt[npar]/F");
+	t->Branch("psjt2Eta",jets_.psjt2Eta,"psjt2Eta[npar]/F");
+	t->Branch("psjt2Phi",jets_.psjt2Phi,"psjt2Phi[npar]/F");
       }
     }
   }
@@ -557,6 +563,7 @@ HiInclusiveJetAnalyzer::analyze(const Event& iEvent,
 
        if(gjet.numberOfDaughters()>0) {
 	 const Candidate & sjt1 = *gjet.daughter(0);       
+	 jets_.sjt1E[jets_.nref] = sjt1.energy();
 	 jets_.sjt1Pt[jets_.nref] = sjt1.pt();
 	 jets_.sjt1Eta[jets_.nref] = sjt1.eta();
 	 jets_.sjt1Phi[jets_.nref] = sjt1.phi();
@@ -575,6 +582,7 @@ HiInclusiveJetAnalyzer::analyze(const Event& iEvent,
 	 	 
 	 if(gjet.numberOfDaughters()>1) {
 	   const Candidate & sjt2 = *gjet.daughter(1);
+	   jets_.sjt2E[jets_.nref] = sjt2.energy();
 	   jets_.sjt2Pt[jets_.nref] = sjt2.pt();
 	   jets_.sjt2Eta[jets_.nref] = sjt2.eta();
 	   jets_.sjt2Phi[jets_.nref] = sjt2.phi();
@@ -593,16 +601,28 @@ HiInclusiveJetAnalyzer::analyze(const Event& iEvent,
 	   
 	 }
 	 else{
+	   jets_.sjt2E[jets_.nref] = -1;
 	   jets_.sjt2Pt[jets_.nref] = -1;
 	   jets_.sjt2Eta[jets_.nref] = -999;
 	   jets_.sjt2Phi[jets_.nref] = -999;
 	 }
        }
        else{
+	 jets_.sjt1E[jets_.nref] = -1;
 	 jets_.sjt1Pt[jets_.nref] = -1;
 	 jets_.sjt1Eta[jets_.nref] = -999;
 	 jets_.sjt1Phi[jets_.nref] = -999;
        }     
+     }
+     else{
+       jets_.sjt2E[jets_.nref] = -1;
+       jets_.sjt2Pt[jets_.nref] = -1;
+       jets_.sjt2Eta[jets_.nref] = -999;
+       jets_.sjt2Phi[jets_.nref] = -999;
+       jets_.sjt1E[jets_.nref] = -1;
+       jets_.sjt1Pt[jets_.nref] = -1;
+       jets_.sjt1Eta[jets_.nref] = -999;
+       jets_.sjt1Phi[jets_.nref] = -999;       
      }
    }
    
@@ -622,6 +642,7 @@ HiInclusiveJetAnalyzer::analyze(const Event& iEvent,
    if(isMC_ ){
      const GenJet * genjet = (*patjets)[j].genJet();
      if(genjet){
+
        jets_.refpt[jets_.nref] = genjet->pt();
        jets_.refeta[jets_.nref] = genjet->eta();
        jets_.refphi[jets_.nref] = genjet->phi();
@@ -630,6 +651,7 @@ HiInclusiveJetAnalyzer::analyze(const Event& iEvent,
      
        int igj = getGroomedGenJetIndex(*genjet);
        //if(igj != (int)j ) cout<<" mismatched index (ref) !"<<endl;
+
        if(igj > -1){
 	 const reco::Jet& gjet = (*groomedGenJets)[igj];
 	 if(gjet.jetArea()>0.5) jets_.refIsHardest[jets_.nref] = true;
@@ -637,49 +659,54 @@ HiInclusiveJetAnalyzer::analyze(const Event& iEvent,
 	 //jets_.refptG[jets_.nref]  = gjet.pt();
 	 //jets_.refetaG[jets_.nref] = gjet.eta();
 	 //jets_.refphiG[jets_.nref] = gjet.phi();
- 
-	 const Candidate & gsjt1 = *gjet.daughter(0);       
-	 jets_.rsjt1Pt[jets_.nref] = gsjt1.pt();
-	 jets_.rsjt1Eta[jets_.nref] = gsjt1.eta();
-	 jets_.rsjt1Phi[jets_.nref] = gsjt1.phi();
 
-	 if(gjet.numberOfDaughters()>1) {
-	   const Candidate & gsjt2 = *gjet.daughter(1);
-	   jets_.rsjt2Pt[jets_.nref] = gsjt2.pt();
-	   jets_.rsjt2Eta[jets_.nref] = gsjt2.eta();
-	   jets_.rsjt2Phi[jets_.nref] = gsjt2.phi();
+	 if(gjet.numberOfDaughters()>0) {
+	   const Candidate & gsjt1 = *gjet.daughter(0);       
+	   jets_.rsjt1E[jets_.nref] = gsjt1.energy();
+	   jets_.rsjt1Pt[jets_.nref] = gsjt1.pt();
+	   jets_.rsjt1Eta[jets_.nref] = gsjt1.eta();
+	   jets_.rsjt1Phi[jets_.nref] = gsjt1.phi();
+	   
+	   if(gjet.numberOfDaughters()>1) {
+	     const Candidate & gsjt2 = *gjet.daughter(1);
+	     jets_.rsjt2E[jets_.nref] = gsjt2.energy();
+	     jets_.rsjt2Pt[jets_.nref] = gsjt2.pt();
+	     jets_.rsjt2Eta[jets_.nref] = gsjt2.eta();
+	     jets_.rsjt2Phi[jets_.nref] = gsjt2.phi();
+	   }
+	   else{
+	     jets_.rsjt2Pt[jets_.nref] = -1;
+	     jets_.rsjt2Eta[jets_.nref] = -999;
+	     jets_.rsjt2Phi[jets_.nref] = -999;
+	   }
 	 }
 	 else{
-	   jets_.rsjt2Pt[jets_.nref] = -1;
-	   jets_.rsjt2Eta[jets_.nref] = -999;
-	   jets_.rsjt2Phi[jets_.nref] = -999;
-	 }
+	   jets_.rsjt1E[jets_.nref] = -1;
+	   jets_.rsjt1Pt[jets_.nref] = -1;
+	   jets_.rsjt1Eta[jets_.nref] = -999;
+	   jets_.rsjt1Phi[jets_.nref] = -999;
+	 }     
+       }else{
+	 jets_.refpt[jets_.nref] = -999.;
+	 jets_.refeta[jets_.nref] = -999.;
+	 jets_.refphi[jets_.nref] = -999.;
+	 jets_.refm[jets_.nref] = -999.;
+	 jets_.refdphijt[jets_.nref] = -999.;
+	 jets_.refdrjt[jets_.nref] = -999.;
+	 
+	 /*
+	   if(doSubJets_) {
+	   jets_.refptG[jets_.nref]  = -999.;
+	   jets_.refetaG[jets_.nref] = -999.;
+	   jets_.refphiG[jets_.nref] = -999.;	 
+	   }
+	 */
        }
-       else{
-	 jets_.rsjt1Pt[jets_.nref] = -1;
-	 jets_.rsjt1Eta[jets_.nref] = -999;
-	 jets_.rsjt1Phi[jets_.nref] = -999;
-       }     
-     }else{
-       jets_.refpt[jets_.nref] = -999.;
-       jets_.refeta[jets_.nref] = -999.;
-       jets_.refphi[jets_.nref] = -999.;
-       jets_.refm[jets_.nref] = -999.;
-       jets_.refdphijt[jets_.nref] = -999.;
-       jets_.refdrjt[jets_.nref] = -999.;
-       
-       /*
-       if(doSubJets_) {
-	 jets_.refptG[jets_.nref]  = -999.;
-	 jets_.refetaG[jets_.nref] = -999.;
-	 jets_.refphiG[jets_.nref] = -999.;	 
-       }
-       */
      }
-
+     
      jets_.jtParFlav[jets_.nref] = (*patjets)[j].partonFlavour();
      jets_.jtHadFlav[jets_.nref] = (*patjets)[j].hadronFlavour();
-     
+
      bool foundMatch = false;
      for (const JetFlavourInfoMatching& jetFlavourInfoMatching : *jetFlavourInfos) {
        if (deltaR(jet.p4(), jetFlavourInfoMatching.first->p4()) < 1e-6) {
@@ -777,34 +804,48 @@ HiInclusiveJetAnalyzer::analyze(const Event& iEvent,
 	  //jets_.genptG[jets_.ngen]  = gjet.pt();
 	  //jets_.genetaG[jets_.ngen] = gjet.eta();
 	  //jets_.genphiG[jets_.ngen] = gjet.phi();
-	  
-	  const Candidate & gsjt1 = *gjet.daughter(0);       
-	  jets_.gsjt1Pt[jets_.ngen] = gsjt1.pt();
-	  jets_.gsjt1Eta[jets_.ngen] = gsjt1.eta();
-	  jets_.gsjt1Phi[jets_.ngen] = gsjt1.phi();
-	  
-	  if(gjet.numberOfDaughters()>1) {
-	    const Candidate & gsjt2 = *gjet.daughter(1);
-	    jets_.gsjt2Pt[jets_.ngen] = gsjt2.pt();
-	    jets_.gsjt2Eta[jets_.ngen] = gsjt2.eta();
-	    jets_.gsjt2Phi[jets_.ngen] = gsjt2.phi();
+
+	  if(gjet.numberOfDaughters()>0) {
+	    const Candidate & gsjt1 = *gjet.daughter(0);       
+	    jets_.gsjt1E[jets_.ngen] = gsjt1.energy();
+	    jets_.gsjt1Pt[jets_.ngen] = gsjt1.pt();
+	    jets_.gsjt1Eta[jets_.ngen] = gsjt1.eta();
+	    jets_.gsjt1Phi[jets_.ngen] = gsjt1.phi();
+
+	    if(gjet.numberOfDaughters()>1) {
+	      const Candidate & gsjt2 = *gjet.daughter(1);
+	      jets_.gsjt2E[jets_.ngen] = gsjt2.energy();
+	      jets_.gsjt2Pt[jets_.ngen] = gsjt2.pt();
+	      jets_.gsjt2Eta[jets_.ngen] = gsjt2.eta();
+	      jets_.gsjt2Phi[jets_.ngen] = gsjt2.phi();
+	    }
+	    else{
+	      jets_.gsjt2E[jets_.ngen] = -1;
+	      jets_.gsjt2Pt[jets_.ngen] = -1;
+	      jets_.gsjt2Eta[jets_.ngen] = -999;
+	      jets_.gsjt2Phi[jets_.ngen] = -999;
+	    }
 	  }
 	  else{
-	    jets_.gsjt2Pt[jets_.ngen] = -1;
-	    jets_.gsjt2Eta[jets_.ngen] = -999;
-	    jets_.gsjt2Phi[jets_.ngen] = -999;
-	  }
+	    jets_.gsjt1E[jets_.ngen] = -1;
+	    jets_.gsjt1Pt[jets_.ngen] = -1;
+	    jets_.gsjt1Eta[jets_.ngen] = -999;
+	    jets_.gsjt1Phi[jets_.ngen] = -999;
+	  }     
 	}
 	else{
-	  jets_.gsjt1Pt[jets_.ngen] = -1;
-	  jets_.gsjt1Eta[jets_.ngen] = -999;
-	  jets_.gsjt1Phi[jets_.ngen] = -999;
-	}     
-      }		
+	    jets_.gsjt1E[jets_.ngen] = -1;
+	    jets_.gsjt1Pt[jets_.ngen] = -1;
+	    jets_.gsjt1Eta[jets_.ngen] = -999;
+	    jets_.gsjt1Phi[jets_.ngen] = -999;
+	    jets_.gsjt2E[jets_.ngen] = -1;
+	    jets_.gsjt2Pt[jets_.ngen] = -1;
+	    jets_.gsjt2Eta[jets_.ngen] = -999;
+	    jets_.gsjt2Phi[jets_.ngen] = -999;	    
+	}
+      }	    
       jets_.ngen++;
     }
-    
-    
 
     jets_.npar = 0;
     for(unsigned int ipar = 0 ; ipar < partonJets->size(); ++ipar){
@@ -846,27 +887,41 @@ HiInclusiveJetAnalyzer::analyze(const Event& iEvent,
       		
 	if(gpjet.numberOfDaughters()>0) {
 	  const Candidate & psjt1 = *gpjet.daughter(0);       
+	  jets_.psjt1E[jets_.npar] = psjt1.energy();
 	  jets_.psjt1Pt[jets_.npar] = psjt1.pt();
 	  jets_.psjt1Eta[jets_.npar] = psjt1.eta();
 	  jets_.psjt1Phi[jets_.npar] = psjt1.phi();
 
 	  if(gpjet.numberOfDaughters()>1) {
 	    const Candidate & psjt2 = *gpjet.daughter(1);
+	    jets_.psjt2E[jets_.npar] = psjt2.energy();
 	    jets_.psjt2Pt[jets_.npar] = psjt2.pt();
 	    jets_.psjt2Eta[jets_.npar] = psjt2.eta();
 	    jets_.psjt2Phi[jets_.npar] = psjt2.phi();
 	  }
 	  else{
+	    jets_.psjt2E[jets_.npar] = -1;
 	    jets_.psjt2Pt[jets_.npar] = -1;
 	    jets_.psjt2Eta[jets_.npar] = -999;
 	    jets_.psjt2Phi[jets_.npar] = -999;
 	  }
 	}
 	else{
+	  jets_.psjt1E[jets_.npar] = -1;
 	  jets_.psjt1Pt[jets_.npar] = -1;
 	  jets_.psjt1Eta[jets_.npar] = -999;
 	  jets_.psjt1Phi[jets_.npar] = -999;
 	}           
+      }
+      else{
+	jets_.psjt2E[jets_.npar] = -1;
+	jets_.psjt2Pt[jets_.npar] = -1;
+	jets_.psjt2Eta[jets_.npar] = -999;
+	jets_.psjt2Phi[jets_.npar] = -999;
+	jets_.psjt1E[jets_.npar] = -1;
+	jets_.psjt1Pt[jets_.npar] = -1;
+	jets_.psjt1Eta[jets_.npar] = -999;
+	jets_.psjt1Phi[jets_.npar] = -999;
       }
       jets_.npar++;
     }
@@ -881,7 +936,7 @@ HiInclusiveJetAnalyzer::analyze(const Event& iEvent,
 int HiInclusiveJetAnalyzer::getGroomedGenJetIndex(const GenJet jet) const {
 
   //Find closest soft-dropped gen jet
-  double drMin = 100;
+  double drMin = 0.2;
   int imatch = -1;
 
   for(unsigned int i = 0 ; i < groomedGenJets->size(); ++i) {
@@ -894,6 +949,7 @@ int HiInclusiveJetAnalyzer::getGroomedGenJetIndex(const GenJet jet) const {
     }
     if(drMin < 1.0e-6) break;
   }
+  //if(drMin>0.2)cout<<" drMin gen : "<<drMin<<endl;  
   return imatch;
 }
 
@@ -901,7 +957,7 @@ int HiInclusiveJetAnalyzer::getGroomedGenJetIndex(const GenJet jet) const {
 int HiInclusiveJetAnalyzer::getGroomedPartonJetIndex(const GenJet jet) const {
 
   //Find closest soft-dropped gen jet
-  double drMin = 100;
+  double drMin = 0.2;
   int imatch = -1;
 
   for(unsigned int i = 0 ; i < groomedPartonJets->size(); ++i) {
@@ -914,13 +970,14 @@ int HiInclusiveJetAnalyzer::getGroomedPartonJetIndex(const GenJet jet) const {
     }
     if(drMin < 1.0e-6) break;
   }
+  //if(drMin>0.2)cout<<" drMin parton : "<<drMin<<endl;  
   return imatch;
 }
 
 //--------------------------------------------------------------------------------------------------
 int HiInclusiveJetAnalyzer::getGroomedJetIndex(const reco::Jet jet) const {
   //Find closest soft-dropped jet
-  double drMin = 100;
+  double drMin = 0.2;
   int imatch = -1;
   for(unsigned int i = 0 ; i < groomedJets->size(); ++i) {
     const reco::Jet& mjet = (*groomedJets)[i];
@@ -932,6 +989,7 @@ int HiInclusiveJetAnalyzer::getGroomedJetIndex(const reco::Jet jet) const {
     }
     if(drMin < 1.0e-6) break;
   }
+  //if(drMin>0.2)cout<<" drMin reco : "<<drMin<<endl;  
   return imatch;
 }
 

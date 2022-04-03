@@ -55,6 +55,7 @@ private:
   EDGetTokenT<PFCandidateCollection> constitSrc_;
   bool writeConstits_;
   bool doLateSD_;
+  bool chargedOnly_;
   double zcut_;
   double beta_;
   double dynktcut_;
@@ -67,6 +68,7 @@ dynGroomedJets<T>::dynGroomedJets(const ParameterSet& iConfig)
     constitSrc_(mayConsume<PFCandidateCollection >(iConfig.getParameter<InputTag>("constitSrc"))),
     writeConstits_(iConfig.getParameter<bool>("writeConstits")),
     doLateSD_(iConfig.getParameter<bool>("doLateSD")),
+    chargedOnly_(iConfig.getParameter<bool>("chargedOnly")),
     zcut_(iConfig.getParameter<double>("zcut")),
     beta_(iConfig.getParameter<double>("beta")),
     dynktcut_(iConfig.getParameter<double>("dynktcut")),
@@ -215,11 +217,17 @@ bool dynGroomedJets<T>::IterativeDeclustering(const T& jet, PseudoJet *sub1, Pse
     {
       vector<PseudoJet> particles;
 
+      int nCharged = 0;
       auto daughters = jet.getJetConstituents();
+      //std::cout<<" nConst "<<daughters.size()<<std::endl;
+	
       for(auto it = daughters.begin(); it!=daughters.end(); ++it){
+	if(chargedOnly_ && (**it).charge() == 0) continue;
 	particles.push_back(PseudoJet((**it).px(), (**it).py(), (**it).pz(), (**it).energy()));
+	nCharged++;
       }
-      
+      //std::cout<<" nCharged =  "<<nCharged<<std::endl;
+      if(nCharged == 0) return false;
       ClusterSequence csiter(particles, jet_def);
       vector<PseudoJet> output_jets = csiter.inclusive_jets(0);
       output_jets = sorted_by_pt(output_jets);
@@ -265,7 +273,7 @@ bool dynGroomedJets<T>::IterativeDeclustering(const T& jet, PseudoJet *sub1, Pse
       if(sub2->has_constituents()) constit2 = sub2->constituents(); 
       if(nsel==nsdin)isHardest = true; 
     } catch (fastjet::Error) { /*return -1;*/ }
-  
+
   return isHardest;
 }
 
@@ -278,6 +286,7 @@ void dynGroomedJets<T>::fillDescriptions(ConfigurationDescriptions& descriptions
   desc.setComment("Dynamically groomed jets");
   desc.add<bool>("writeConstits", false);
   desc.add<bool>("doLateSD", false);
+  desc.add<bool>("chargedOnly", false);
   desc.add<double>("zcut", 0.1);
   desc.add<double>("beta", 0.0);
   desc.add<double>("dynktcut", 1.0);

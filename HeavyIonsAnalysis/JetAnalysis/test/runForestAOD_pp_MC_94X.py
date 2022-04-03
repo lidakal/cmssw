@@ -28,10 +28,11 @@ process.source = cms.Source("PoolSource",
     fileNames = cms.untracked.vstring(
 	'/store/himc/RunIIpp5Spring18DR/QCD_pThat-15_bJet_TuneCP5_5p02TeV_pythia8/AODSIM/94X_mc2017_realistic_forppRef5TeV_v1-v1/230000/00D396CF-878A-E911-88E8-14187741278B.root'
     ),
+                            #skipEvents = cms.untracked.uint32(1242)
 )
 
 # Number of events we want to process, -1 = all events
-process.maxEvents = cms.untracked.PSet(input = cms.untracked.int32(100))
+process.maxEvents = cms.untracked.PSet(input = cms.untracked.int32(10))
 
 #####################################################################################
 # Load Global Tag, Geometry, etc.
@@ -94,24 +95,27 @@ process.load('HeavyIonsAnalysis.EventAnalysis.hltobject_cfi')
 process.load('HeavyIonsAnalysis.EventAnalysis.l1object_cfi')
 
 process.load('HeavyIonsAnalysis.JetAnalysis.HiGenAnalyzer_cfi')
-process.HiGenParticleAna.genParticleSrc = cms.untracked.InputTag("genParticles")
+#process.HiGenParticleAna.genParticleSrc = cms.untracked.InputTag("genPartonsForJets")
+process.HiGenParticleAna.genParticleRVSrc = cms.untracked.InputTag("genPartonsForJets")
 process.HiGenParticleAna.doHI = False
 process.HiGenParticleAna.etaMax = cms.untracked.double(2.5) # default is 2 
 process.HiGenParticleAna.stableOnly = False
 process.HiGenParticleAna.useRefVector = cms.untracked.bool(True)
+
 process.bHadronAna = process.HiGenParticleAna.clone(
-    genParticleRVSrc = cms.untracked.InputTag("ak4PFPatJetPartons","bHadrons")
+    genParticleRVSrc = cms.untracked.InputTag("selectedHadronsAndPartons","bHadrons"),
+    useRefVector = True
 )
-process.cHadronAna = process.HiGenParticleAna.clone(
-    genParticleRVSrc = cms.untracked.InputTag("ak4PFPatJetPartons","cHadrons")
+process.cHadronAna = process.bHadronAna.clone(
+    genParticleRVSrc = cms.untracked.InputTag("selectedHadronsAndPartons","cHadrons")
 )
 process.leptonAna = process.HiGenParticleAna.clone(
-    genParticleRVSrc = cms.untracked.InputTag("ak4PFPatJetPartons","leptons")
+    genParticleRVSrc = cms.untracked.InputTag("selectedHadronsAndPartons","leptons")
 )
-process.outgoingPartonAna = process.HiGenParticleAna.clone(
-    genParticleRVSrc = cms.untracked.InputTag("ak4PFPatJetPartons","algorithmicPartons")
+process.outgoingPartonAna = process.bHadronAna.clone(
+    genParticleRVSrc = cms.untracked.InputTag("selectedHadronsAndPartons","algorithmicPartons")
 )
-process.incomingPartonAna = process.HiGenParticleAna.clone(
+process.incomingPartonAna = process.bHadronAna.clone(
     genParticleSrc = cms.untracked.InputTag("genParticles"),
     useRefVector = cms.untracked.bool(False)
 )
@@ -175,7 +179,6 @@ process.ana_step = cms.Path(
     process.hiEvtAnalyzer *
     #process.hltobject +
     # process.l1object +
-    #process.HiGenParticleAna*
     process.genJetSequence +
     process.jetSequence +
     process.bHadronAna +
@@ -190,6 +193,7 @@ process.ana_step = cms.Path(
     #process.pfcandAnalyzer +
     process.HiForest +
     #process.trackSequencesPP +
+    #process.HiGenParticleAna*
     process.runAnalyzer
 )
 
@@ -253,8 +257,8 @@ process.pAna = cms.EndPath(process.skimanalysis)
 process.load("RecoHI.HiJetAlgos.dynGroomedGenJets_cfi")
 process.load("RecoHI.HiJetAlgos.dynGroomedPFJets_cfi")
 
-process.dynGroomedGenJets.doLateSD = True
-process.dynGroomedPFJets.doLateSD = True
+process.dynGroomedGenJets.doLateSD = False
+process.dynGroomedPFJets.doLateSD = False
 
 process.genJetSequence.replace(process.akSoftDrop4GenJets, process.dynGroomedGenJets)
 process.jetSequence.replace(process.akSoftDrop4PFJets, process.dynGroomedPFJets)
@@ -264,4 +268,14 @@ MassReplaceInputTag(process, new="dynGroomedGenJets", old="akSoftDrop4GenJets")
 MassReplaceInputTag(process, new="dynGroomedPFJets", old="akSoftDrop4PFJets")
 MassReplaceInputTag(process, new="dynGroomedPFJets:SubJets", old="akSoftDrop4PFJets:SubJets")
 
+process.genParticlesForJets.undecayHF = cms.bool(False);  # for full b-hadron, for the charged part, see below
+process.genPartonsForJets.undecayHF = cms.bool(False); # always False
+process.genParticlesForJets.chargedOnly = cms.bool(False);  # don't use these
+process.genPartonsForJets.chargedOnly = cms.bool(False);  # don't use these
+process.dynGroomedGenJets.chargedOnly = True
+process.dynGroomedPFJets.chargedOnly = True
 
+#use the following with undecayHF set to False
+process.load("RecoHI.HiJetAlgos.GenHFHadronReplacer_cfi")
+process.genJetSequence.insert(0,process.GenHFHadronReplacer)
+process.genParticlesForJets.src = 'GenHFHadronReplacer'
