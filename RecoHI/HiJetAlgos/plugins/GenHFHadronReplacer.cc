@@ -59,7 +59,7 @@ private:
   const edm::EDGetTokenT<reco::GenParticleCollection> genParticlesToken_;
   bool isFinalB( const reco::Candidate &particle) const;  
   bool isFromB( const reco::Candidate &particle) const;  
-  void visible( reco::Candidate::PolarLorentzVector &v, const reco::Candidate &particle, bool doCharge) const;
+  void visible( reco::Candidate::PolarLorentzVector &v, const reco::Candidate &particle, int doCharge) const;
 };
 
 
@@ -84,8 +84,9 @@ void GenHFHadronReplacer::produce(edm::StreamID, edm::Event &evt, const edm::Eve
       //std::cout<<" b hadron = "<<genPart.pt()<<" "<<genPart.eta()<<" "<<genPart.phi()<<" "<<genPart.mass()<<" "<<genPart.status()<<" "<<genPart.px()<<" "<<genPart.p()<<std::endl;
       reco::Candidate::PolarLorentzVector chargedB(0.,0.,0.,0.);
       reco::Candidate::PolarLorentzVector neutralB(0.,0.,0.,0.);
-      visible(chargedB, genPart,true);
-      visible(neutralB, genPart,false);
+      //visible(chargedB, genPart,2); // for addding up both types
+      visible(chargedB, genPart,1);
+      visible(neutralB, genPart,0);
       reco::GenParticle newGenCharged(1., chargedB, genPart.vertex(), genPart.pdgId(), 1, true);
       reco::GenParticle newGenNeutral(0., neutralB, genPart.vertex(), genPart.pdgId(), 1, true);
       //std::cout<<" charged  = "<<newGenCharged.pt()<<" "<<newGenCharged.eta()<<" "<<newGenCharged.phi()<<" "<<newGenCharged.mass()<<" "<<newGenCharged.status()<<" "<<newGenCharged.px()<<" "<<newGenCharged.p()<<std::endl;
@@ -141,7 +142,7 @@ bool GenHFHadronReplacer::isFromB( const reco::Candidate &particle) const{
 
 void GenHFHadronReplacer::visible
 (
- reco::Candidate::PolarLorentzVector &v, const reco::Candidate &particle, bool doCharge) const
+ reco::Candidate::PolarLorentzVector &v, const reco::Candidate &particle, int doCharge) const
 {
 
 
@@ -150,9 +151,10 @@ void GenHFHadronReplacer::visible
   for (size_t i = 0; i < npart; ++i) {
     if(particle.daughter(i)->status()==1){
       int charge = particle.daughter(i)->charge();
-      if(doCharge && charge ==0) continue;
+      if(doCharge == 1 && charge ==0) continue;
       int pdgid = abs(particle.daughter(i)->pdgId());
-      if(!doCharge && (charge !=0 || pdgid == 12 || pdgid == 14 || pdgid == 16) ) continue;     
+      if(doCharge == 0 && charge !=0) continue;
+      if(pdgid == 12 || pdgid == 14 || pdgid == 16) continue;     
 
       reco::Candidate::PolarLorentzVector vTemp(0.,0.,0.,0.);
       vTemp.SetPt(particle.daughter(i)->pt());

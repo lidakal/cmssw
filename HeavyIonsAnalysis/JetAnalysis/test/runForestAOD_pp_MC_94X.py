@@ -32,7 +32,7 @@ process.source = cms.Source("PoolSource",
 )
 
 # Number of events we want to process, -1 = all events
-process.maxEvents = cms.untracked.PSet(input = cms.untracked.int32(1))
+process.maxEvents = cms.untracked.PSet(input = cms.untracked.int32(100))
 
 #####################################################################################
 # Load Global Tag, Geometry, etc.
@@ -262,12 +262,12 @@ process.pVertexFilterCutEandG = cms.Path(process.pileupVertexFilterCutEandG)
 process.pAna = cms.EndPath(process.skimanalysis)
 
 # Customization
+# write heavy stuff for debugging b-tagging
+process.ak4PFJetAnalyzer.doLifeTimeTaggingExtra = True
 
+# dynamical grooming code
 process.load("RecoHI.HiJetAlgos.dynGroomedGenJets_cfi")
 process.load("RecoHI.HiJetAlgos.dynGroomedPFJets_cfi")
-
-process.dynGroomedGenJets.doLateSD = False
-process.dynGroomedPFJets.doLateSD = False
 
 process.genJetSequence.replace(process.akSoftDrop4GenJets, process.dynGroomedGenJets)
 process.jetSequence.replace(process.akSoftDrop4PFJets, process.dynGroomedPFJets)
@@ -276,15 +276,20 @@ from Configuration.Applications.ConfigBuilder import MassReplaceInputTag
 MassReplaceInputTag(process, new="dynGroomedGenJets", old="akSoftDrop4GenJets")
 MassReplaceInputTag(process, new="dynGroomedPFJets", old="akSoftDrop4PFJets")
 MassReplaceInputTag(process, new="dynGroomedPFJets:SubJets", old="akSoftDrop4PFJets:SubJets")
+#option to do late soft drop
+process.dynGroomedGenJets.doLateSD = False
+process.dynGroomedPFJets.doLateSD = False
 
-process.genParticlesForJets.undecayHF = cms.bool(False);  # for full b-hadron, for the charged part, see below
-process.genPartonsForJets.undecayHF = cms.bool(False); # always False
-process.genParticlesForJets.chargedOnly = cms.bool(False);  # don't use these
-process.genPartonsForJets.chargedOnly = cms.bool(False);  # don't use these
+## don't change these
+process.genParticlesForJets.undecayHF = cms.bool(False);  
+process.genPartonsForJets.undecayHF = cms.bool(False); 
+process.genParticlesForJets.chargedOnly = cms.bool(False);  
+process.genPartonsForJets.chargedOnly = cms.bool(False);  
+## change these to run charged only or full jet declustering
 process.dynGroomedGenJets.chargedOnly = True
 process.dynGroomedPFJets.chargedOnly = True
 
-#use the following with undecayHF set to False
+#replace b-hadron decays by the parent
 process.load("RecoHI.HiJetAlgos.GenHFHadronReplacer_cfi")
 process.genJetSequence.insert(0,process.GenHFHadronReplacer)
 process.genParticlesForJets.src = 'GenHFHadronReplacer'

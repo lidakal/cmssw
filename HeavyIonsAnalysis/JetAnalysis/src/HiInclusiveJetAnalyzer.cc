@@ -41,6 +41,7 @@ HiInclusiveJetAnalyzer::HiInclusiveJetAnalyzer(const edm::ParameterSet& iConfig)
   if(isMC_) partonjetTag_ = consumes<vector<GenJet>>(iConfig.getParameter<InputTag>("partonjetTag"));
   useJEC_ = iConfig.getUntrackedParameter<bool>("useJEC",true);
   doLifeTimeTagging_ = iConfig.getUntrackedParameter<bool>("doLifeTimeTagging",false);
+  doLifeTimeTaggingExtra_ = iConfig.getUntrackedParameter<bool>("doLifeTimeTaggingExtra",false);
   skipCorrections_  = iConfig.getUntrackedParameter<bool>("skipCorrections",false);
   pfCandidateLabel_ = consumes<PFCandidateCollection> (iConfig.getUntrackedParameter<edm::InputTag>("pfCandidateLabel",edm::InputTag("particleFlow")));  
   if (doSubJets_){ 
@@ -56,7 +57,10 @@ HiInclusiveJetAnalyzer::HiInclusiveJetAnalyzer(const edm::ParameterSet& iConfig)
 
   if(doLifeTimeTagging_){
     bTagJetName_ = iConfig.getUntrackedParameter<string>("bTagJetName");
-    svTagInfos_ = bTagJetName_+"PfInclusiveSecondaryVertexFinder";
+    if(doLifeTimeTaggingExtra_){
+      svTagInfos_ = bTagJetName_+"PfInclusiveSecondaryVertexFinder";
+      ipTagInfos_ = bTagJetName_+"PfImpactParameter";
+    }
     jetPBJetTags_ = bTagJetName_+"JetProbabilityBJetTags";
     combinedSVV2BJetTags_ = bTagJetName_+"CombinedSecondaryVertexV2BJetTags";
     deepCSVBJetTags_ = bTagJetName_+"PfDeepCSVJetTags:probb";
@@ -242,22 +246,31 @@ HiInclusiveJetAnalyzer::beginJob() {
     t->Branch("jtDiscDeepFlavourC",jets_.jtDiscDeepFlavourC,"jtDiscDeepFlavourC[nref]/F");
     t->Branch("jtDiscProb",jets_.jtDiscProb,"jtDiscProb[nref]/F");
 
-    t->Branch("nsvtx",    jets_.nsvtx,    "nsvtx[nref]/I");
-    t->Branch("svtxntrk", &jets_.svtxntrk);
-    //t->Branch("svtxdl",   &jets_.svtxdl);
-    t->Branch("svtxdls",  &jets_.svtxdls);
-    //t->Branch("svtxdl2d", &jets_.svtxdl2d);
-    t->Branch("svtxdls2d", &jets_.svtxdls2d);
-    t->Branch("svtxm",    &jets_.svtxm);
-    t->Branch("svtxpt",   &jets_.svtxpt);
-    t->Branch("svtxmcorr", &jets_.svtxmcorr);
 
-    t->Branch("svtxTrPt",   &jets_.svtxTrPt);
-    t->Branch("svtxTrEta",   &jets_.svtxTrEta);
-    t->Branch("svtxTrPhi",   &jets_.svtxTrPhi);
-
+    if (doLifeTimeTaggingExtra_) {
+      t->Branch("nsvtx",    jets_.nsvtx,    "nsvtx[nref]/I");
+      t->Branch("svtxntrk", &jets_.svtxntrk);
+      //t->Branch("svtxdl",   &jets_.svtxdl);
+      t->Branch("svtxdls",  &jets_.svtxdls);
+      //t->Branch("svtxdl2d", &jets_.svtxdl2d);
+      t->Branch("svtxdls2d", &jets_.svtxdls2d);
+      t->Branch("svtxm",    &jets_.svtxm);
+      t->Branch("svtxpt",   &jets_.svtxpt);
+      t->Branch("svtxmcorr", &jets_.svtxmcorr);
+      
+      t->Branch("svtxTrPt",   &jets_.svtxTrPt);
+      t->Branch("svtxTrEta",   &jets_.svtxTrEta);
+      t->Branch("svtxTrPhi",   &jets_.svtxTrPhi);
+   
+      t->Branch("nselIPtrk", jets_.nselIPtrk,"nselIPtrk[nref]/I");
+      t->Branch("nIP", &jets_.nIP,"nIP/I");
+      t->Branch("ipPt",jets_.ipPt,"ipPt[nIP]/F");
+      t->Branch("ipEta",jets_.ipEta,"ipEta[nIP]/F");
+      t->Branch("ipPhi",jets_.ipPhi,"ipPhi[nIP]/F");
+      t->Branch("ipProb",jets_.ipProb,"ipProb[nIP]/F");
+      t->Branch("ip3dSig",jets_.ip3dSig,"ip3dSig[nIP]/F");
+    }
   }
-
 
   if(isMC_){
 
@@ -387,80 +400,96 @@ HiInclusiveJetAnalyzer::analyze(const Event& iEvent,
 
       jets_.jtDiscProb[jets_.nref]=(*patjets)[j].bDiscriminator(jetPBJetTags_);
 
-      if((*patjets)[j].hasTagInfo(svTagInfos_.c_str()) ){
-	
-	const CandSecondaryVertexTagInfo *svTagInfo = (*patjets)[j].tagInfoCandSecondaryVertex(svTagInfos_.c_str());
-
-	jets_.nsvtx[jets_.nref]     = svTagInfo->nVertices();
-		
-	std::vector<int> svtxntrks;
-	std::vector<float> svjetDr, svtxdl, svtxdls, svtxdl2d, svtxdls2d, svtxm, svtxmcorr, svtxpt, svtxTrPt, svtxTrEta, svtxTrPhi;
-	std::vector<int> svType;
-	if(jets_.nsvtx[jets_.nref]==0){
-		svtxntrks.push_back(-1);
-		svjetDr.push_back(-1);
-		svtxdl.push_back(-999);
-		svtxdls.push_back(-999);
-		svtxdl2d.push_back(-999);
-		svtxm.push_back(-10);
-		svtxmcorr.push_back(-10);
-		svtxpt.push_back(-1);	
-		svType.push_back(-9);
-		svtxTrPt.push_back(-1);
-		svtxTrEta.push_back(-1);
-		svtxTrPhi.push_back(-1);
-	}
-
-	for (int ivtx=0; ivtx<jets_.nsvtx[jets_.nref]; ivtx++) {
-	  svtxntrks.push_back(svTagInfo->nVertexTracks(ivtx));
-	  svjetDr.push_back(deltaR(svTagInfo->flightDirection(ivtx),jetDir));
-
-	  // this is the 3d flight distance, for 2-D use (0,true)
-	  Measurement1D m1D = svTagInfo->flightDistance(ivtx);
-	  svtxdl.push_back(m1D.value());
-	  svtxdls.push_back(m1D.significance());
-	  Measurement1D m2D = svTagInfo->flightDistance(ivtx,true);
-          svtxdl2d.push_back(m2D.value());
-          svtxdls2d.push_back(m2D.significance());
-          //const Vertex& svtx = svTagInfo->secondaryVertex(ivtx);
-	  //'const Vertex&' from expression of type 'const VertexCompositePtrCandidate'
-	  const VertexCompositePtrCandidate svtx = svTagInfo->secondaryVertex(ivtx);
-	  double svtxM = svtx.p4().mass();
-          double svtxPt = svtx.p4().pt();
-	  //if(jets_.nsvtx[jets_.nref]>1) cout << "svtxm: "<< svtxM << " svtxpt: "<< svtxPt << endl;
-	  svtxm.push_back(svtxM); 
-	  svtxpt.push_back(svtxPt);
-	  //try out the corrected mass (http://arxiv.org/pdf/1504.07670v1.pdf)
-	  //mCorr=srqt(m^2+p^2sin^2(th)) + p*sin(th)
-	  double sinth = svtx.p4().Vect().Unit().Cross(svTagInfo->flightDirection(0).unit()).Mag2();
-	  sinth = sqrt(sinth);
-	  svtxmcorr.push_back(sqrt(pow(svtxM,2)+(pow(svtxPt,2)*pow(sinth,2)))+svtxPt*sinth);
-
-	  std::vector<edm::Ptr<reco::Candidate> > svtxTracks = svTagInfo->vertexTracks(ivtx);
-	  for(unsigned int itrk=0; itrk<svtxTracks.size(); itrk++){
-	    svtxTrPt.push_back(svtxTracks.at(itrk)->pt());
-	    svtxTrEta.push_back(svtxTracks.at(itrk)->eta());
-	    svtxTrPhi.push_back(svtxTracks.at(itrk)->phi());
+      if(doLifeTimeTaggingExtra_){
+	if((*patjets)[j].hasTagInfo(svTagInfos_.c_str()) ){
+	  
+	  const CandSecondaryVertexTagInfo *svTagInfo = (*patjets)[j].tagInfoCandSecondaryVertex(svTagInfos_.c_str());
+	  
+	  jets_.nsvtx[jets_.nref]     = svTagInfo->nVertices();
+	  
+	  std::vector<int> svtxntrks;
+	  std::vector<float> svjetDr, svtxdl, svtxdls, svtxdl2d, svtxdls2d, svtxm, svtxmcorr, svtxpt, svtxTrPt, svtxTrEta, svtxTrPhi;
+	  std::vector<int> svType;
+	  if(jets_.nsvtx[jets_.nref]==0){
+	    svtxntrks.push_back(-1);
+	    svjetDr.push_back(-1);
+	    svtxdl.push_back(-999);
+	    svtxdls.push_back(-999);
+	    svtxdl2d.push_back(-999);
+	    svtxm.push_back(-10);
+	    svtxmcorr.push_back(-10);
+	    svtxpt.push_back(-1);	
+	    svType.push_back(-9);
+	    svtxTrPt.push_back(-1);
+	    svtxTrEta.push_back(-1);
+	    svtxTrPhi.push_back(-1);
 	  }
-
-
+	  
+	  for (int ivtx=0; ivtx<jets_.nsvtx[jets_.nref]; ivtx++) {
+	    svtxntrks.push_back(svTagInfo->nVertexTracks(ivtx));
+	    svjetDr.push_back(deltaR(svTagInfo->flightDirection(ivtx),jetDir));
+	    
+	    // this is the 3d flight distance, for 2-D use (0,true)
+	    Measurement1D m1D = svTagInfo->flightDistance(ivtx);
+	    svtxdl.push_back(m1D.value());
+	    svtxdls.push_back(m1D.significance());
+	    Measurement1D m2D = svTagInfo->flightDistance(ivtx,true);
+	    svtxdl2d.push_back(m2D.value());
+	    svtxdls2d.push_back(m2D.significance());
+	    //const Vertex& svtx = svTagInfo->secondaryVertex(ivtx);
+	    //'const Vertex&' from expression of type 'const VertexCompositePtrCandidate'
+	    const VertexCompositePtrCandidate svtx = svTagInfo->secondaryVertex(ivtx);
+	    double svtxM = svtx.p4().mass();
+	    double svtxPt = svtx.p4().pt();
+	    //if(jets_.nsvtx[jets_.nref]>1) cout << "svtxm: "<< svtxM << " svtxpt: "<< svtxPt << endl;
+	    svtxm.push_back(svtxM); 
+	    svtxpt.push_back(svtxPt);
+	    //try out the corrected mass (http://arxiv.org/pdf/1504.07670v1.pdf)
+	    //mCorr=srqt(m^2+p^2sin^2(th)) + p*sin(th)
+	    double sinth = svtx.p4().Vect().Unit().Cross(svTagInfo->flightDirection(0).unit()).Mag2();
+	    sinth = sqrt(sinth);
+	    svtxmcorr.push_back(sqrt(pow(svtxM,2)+(pow(svtxPt,2)*pow(sinth,2)))+svtxPt*sinth);
+	    
+	    std::vector<edm::Ptr<reco::Candidate> > svtxTracks = svTagInfo->vertexTracks(ivtx);
+	    for(unsigned int itrk=0; itrk<svtxTracks.size(); itrk++){
+	      svtxTrPt.push_back(svtxTracks.at(itrk)->pt());
+	      svtxTrEta.push_back(svtxTracks.at(itrk)->eta());
+	      svtxTrPhi.push_back(svtxTracks.at(itrk)->phi());
+	    }
+	    
+	    
+	  }
+	  jets_.svtxntrk.push_back(svtxntrks);
+	  jets_.svJetDeltaR.push_back(svjetDr);
+	  jets_.svtxdl.push_back(svtxdl);
+	  jets_.svtxdls.push_back(svtxdls);
+	  jets_.svtxdl2d.push_back(svtxdl2d);
+	  jets_.svtxdls2d.push_back(svtxdls2d);
+	  jets_.svtxm.push_back(svtxm);
+	  jets_.svtxmcorr.push_back(svtxmcorr);
+	  jets_.svtxpt.push_back(svtxpt);
+	  jets_.svtxTrPt.push_back(svtxTrPt);
+	  jets_.svtxTrEta.push_back(svtxTrEta);
+	  jets_.svtxTrPhi.push_back(svtxTrPhi);
 	}
-	jets_.svtxntrk.push_back(svtxntrks);
-        jets_.svJetDeltaR.push_back(svjetDr);
-        jets_.svtxdl.push_back(svtxdl);
-        jets_.svtxdls.push_back(svtxdls);
-        jets_.svtxdl2d.push_back(svtxdl2d);
-        jets_.svtxdls2d.push_back(svtxdls2d);
-        jets_.svtxm.push_back(svtxm);
-        jets_.svtxmcorr.push_back(svtxmcorr);
-        jets_.svtxpt.push_back(svtxpt);
-	jets_.svtxTrPt.push_back(svtxTrPt);
-	jets_.svtxTrEta.push_back(svtxTrEta);
-	jets_.svtxTrPhi.push_back(svtxTrPhi);
+	
+	if((*patjets)[j].hasTagInfo(ipTagInfos_.c_str()) ){
+	  const CandIPTagInfo *ipTagInfo = (*patjets)[j].tagInfoCandIP(ipTagInfos_.c_str());
+	  int it = 0;
+	  for (const auto & trk : ipTagInfo->selectedTracks()){
+	    jets_.ipPt[jets_.nIP + it] = trk->pt();
+	    jets_.ipEta[jets_.nIP + it] = trk->eta();
+	    jets_.ipPhi[jets_.nIP + it] = trk->phi();
+	    jets_.ipProb[jets_.nIP + it] = ipTagInfo->probabilities(0)[it];
+	    reco::btag::TrackIPData data = ipTagInfo->impactParameterData()[it];
+	    jets_.ip3dSig[jets_.nIP + it] = data.ip3d.significance();
+	    it++;
+	  }
+	  jets_.nIP +=  it;
+	  jets_.nselIPtrk[jets_.nref] = it;
+	}
       }
-
     }
-  
     if(doHiJetID_){
       // Jet ID variables
 

@@ -4,7 +4,7 @@ config = Configuration()
 
 ### General ###
 config.section_('General')
-config.General.requestName = 'bJet2017G_bjet_SD_chargedSJ_partialBFix'
+config.General.requestName = 'bJet2017G_bjet_SD_chargedSJ_mergedB'
 config.General.workArea = 'crab_projects'
 config.General.transferOutputs = True
 config.General.transferLogs = True

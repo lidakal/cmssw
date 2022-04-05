@@ -70,6 +70,7 @@ private:
 
   double genPtMin_;
   bool doLifeTimeTagging_;
+  bool doLifeTimeTaggingExtra_;
   bool skipCorrections_;
   bool doHiJetID_;
   bool doStandardJetID_;
@@ -84,6 +85,7 @@ private:
 
   std::string bTagJetName_;
   std::string svTagInfos_;
+  std::string ipTagInfos_;
   std::string jetPBJetTags_;
   std::string combinedSVV2BJetTags_;
   std::string deepCSVBJetTags_;
@@ -105,7 +107,8 @@ private:
   edm::EDGetTokenT<edm::View<reco::Jet> >                  groomedPartonJetsToken_;
   bool                                                     useSubjets_;
 
-  static const int MAXJETS = 1000;
+  static const int MAXJETS = 100;
+  static const int MAXTRACKS = 1000;
 
   struct JRA{
 
@@ -354,6 +357,15 @@ private:
     float psjt2Eta[MAXJETS];
     float psjt2Phi[MAXJETS];
     float psjt2Mass[MAXJETS];
+
+    int nselIPtrk[MAXJETS];
+    
+    int nIP;
+    float ipPt[MAXTRACKS];
+    float ipEta[MAXTRACKS];
+    float ipPhi[MAXTRACKS];
+    float ipProb[MAXTRACKS];
+    float ip3dSig[MAXTRACKS];
 
 
   };
