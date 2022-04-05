@@ -194,7 +194,7 @@ process.ana_step = cms.Path(
     #process.leptonAna +
     #process.outgoingPartonAna + 
     process.incomingPartonAna + 
-    #process.bDecayAna + 
+    process.bDecayAna + 
     # Should be added in the path for VID module
     # process.egmGsfElectronIDSequence +
     #process.ggHiNtuplizer +
@@ -293,3 +293,4 @@ process.dynGroomedPFJets.chargedOnly = True
 process.load("RecoHI.HiJetAlgos.GenHFHadronReplacer_cfi")
 process.genJetSequence.insert(0,process.GenHFHadronReplacer)
 process.genParticlesForJets.src = 'GenHFHadronReplacer'
+
