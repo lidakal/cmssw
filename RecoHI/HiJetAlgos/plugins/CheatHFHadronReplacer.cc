@@ -59,7 +59,7 @@ private:
   const edm::EDGetTokenT<reco::GenParticleCollection> genParticlesToken_;
   bool isFinalB(const reco::Candidate &particle) const;  
   bool isFromB(const reco::Candidate &particle) const;  
-  std::unique_ptr<reco::GenParticleCollection> addDaughters(const reco::Candidate &particle, int bCode) const;
+  reco::GenParticleCollection addDaughters(const reco::Candidate &particle, reco::GenParticleCollection daughterCollection, int bCode) const;
   //void visible( reco::Candidate::PolarLorentzVector &v, const reco::Candidate &particle, int doCharge) const;
 };
 
@@ -81,25 +81,32 @@ void CheatHFHadronReplacer::produce(edm::StreamID, edm::Event &evt, const edm::E
 
   // Kep track of B's
   int bCode = 100;
-
+  int fromBs = 0;
   for (const reco::GenParticle& genPart : *genParticles) {
     if(isFinalB(genPart)){
       // Add the B
       outputCollection->push_back(genPart);
-
+      std::cout << "Found a B!" << std::endl;
       // Add the daughters to the output collection
-      auto daughterCollection = addDaughters(genPart, bCode);
-      (*outputCollection).insert((*outputCollection).end(), (*daughterCollection).begin(), (*daughterCollection).end());
+      reco::GenParticleCollection daughterCollection = {};
+      daughterCollection = addDaughters(genPart, daughterCollection, bCode);
+      std::cout << "Daughters added to collection : " << daughterCollection.size() << std::endl;
+      (*outputCollection).insert((*outputCollection).end(), daughterCollection.begin(), daughterCollection.end());
       bCode += 100;
     }
-
-    // Skip b daughters
-    if (isFromB(genPart)) continue;	
-
-    // Add the rest of the particles			 
     if (genPart.status()!=1) continue;
+    // Skip b daughters
+    if (isFromB(genPart)) {
+      std::cout << "Found from B!" << std::endl;
+      fromBs++;
+      continue;	
+    }
+    // Add the rest of the particles			 
+    
     outputCollection->push_back(genPart);
   }
+  std::cout << "particles fromB found (skipped) : " << fromBs << std::endl;
+  std::cout << "Total particles in collection: " << (*outputCollection).size() << std::endl;
   evt.put(std::move(outputCollection));
 }
 
@@ -170,24 +177,29 @@ void CheatHFHadronReplacer::visible
   
 }
 */
-std::unique_ptr<reco::GenParticleCollection> CheatHFHadronReplacer::addDaughters(const reco::Candidate &particle, int bCode) const {
-  std::cout << "Found a B!" << std::endl;
-  // Create collection to return
-  static reco::GenParticleCollection daughterCollection;
-  //static auto daughterCollection = std::make_unique<reco::GenParticleCollection>();
+reco::GenParticleCollection CheatHFHadronReplacer::addDaughters(const reco::Candidate &particle, reco::GenParticleCollection collection, int bCode) const {
+
+  reco::GenParticleCollection daughterCollection = collection;
 
   // Get daughters
   unsigned int ndaught = particle.numberOfDaughters();
 
   for (size_t i = 0; i < ndaught; i++) {
+    
     const reco::Candidate& daughter = *particle.daughter(i);
-    daughterCollection.push_back(reco::GenParticle(daughter.charge(), daughter.p4(), daughter.vertex(), daughter.pdgId(), bCode, true));
+    
+    if (daughter.status() == 1) {
+      std::cout << "Found a daughter!" << std::endl;
+      daughterCollection.push_back(reco::GenParticle(daughter.charge(), daughter.p4(), daughter.vertex(), daughter.pdgId(), bCode, true));
+      //daughterCollection.push_back(reco::GenParticle(daughter));
+    }
     unsigned int ndaughtdaught = daughter.numberOfDaughters();
     if (ndaughtdaught > 0) {
-      addDaughters(daughter, bCode);
+      daughterCollection = addDaughters(daughter, daughterCollection, bCode);
     }
   }
-  return std::make_unique<reco::GenParticleCollection>(daughterCollection);
+  //std::cout << "Daughters found : " << daughterCollection.size() << std::endl;
+  return daughterCollection;
 }
 			    
 
