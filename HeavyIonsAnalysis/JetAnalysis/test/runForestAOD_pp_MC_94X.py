@@ -32,7 +32,7 @@ process.source = cms.Source("PoolSource",
 )
 
 # Number of events we want to process, -1 = all events
-process.maxEvents = cms.untracked.PSet(input = cms.untracked.int32(100))
+process.maxEvents = cms.untracked.PSet(input = cms.untracked.int32(1))
 
 #####################################################################################
 # Load Global Tag, Geometry, etc.
@@ -294,3 +294,5 @@ process.load("RecoHI.HiJetAlgos.GenHFHadronReplacer_cfi")
 process.genJetSequence.insert(0,process.GenHFHadronReplacer)
 process.genParticlesForJets.src = 'GenHFHadronReplacer'
 
+process.load("RecoHI.HiJetAlgos.RecoHFHadronReplacer_cfi")
+process.jetSequence+=process.RecoHFHadronReplacer
