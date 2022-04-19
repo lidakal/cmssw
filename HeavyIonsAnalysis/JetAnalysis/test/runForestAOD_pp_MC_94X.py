@@ -124,7 +124,7 @@ process.incomingPartonAna = process.bHadronAna.clone(
 
 process.bDecayAna = process.incomingPartonAna.clone(
     #genParticleSrc = cms.untracked.InputTag("CheatHFHadronReplacer"),
-    genParticleStc = cms.untracked.InputTag("CheatHFHadronReplacer"),
+    genParticleSrc = cms.untracked.InputTag("CheatHFHadronReplacer"),
     partonMEOnly = False,
     chargedOnly = True
 )
