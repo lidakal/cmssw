@@ -27,6 +27,7 @@ process.HiForest.HiForestVersion = cms.string(version)
 process.source = cms.Source("PoolSource",
     fileNames = cms.untracked.vstring(
 	'/store/himc/RunIIpp5Spring18DR/QCD_pThat-15_bJet_TuneCP5_5p02TeV_pythia8/AODSIM/94X_mc2017_realistic_forppRef5TeV_v1-v1/230000/00D396CF-878A-E911-88E8-14187741278B.root'
+        #'file:/data_CMS/cms/mnguyen/00D396CF-878A-E911-88E8-14187741278B.root'
     ),
                             #skipEvents = cms.untracked.uint32(1242)
 )
@@ -122,7 +123,8 @@ process.incomingPartonAna = process.bHadronAna.clone(
 )
 
 process.bDecayAna = process.incomingPartonAna.clone(
-    genParticleSrc = cms.untracked.InputTag("GenHFHadronReplacer"),
+    #genParticleSrc = cms.untracked.InputTag("CheatHFHadronReplacer"),
+    genParticleSrc = cms.untracked.InputTag("CheatHFHadronReplacer"),
     partonMEOnly = False,
     chargedOnly = True
 )
@@ -290,7 +292,7 @@ process.dynGroomedGenJets.chargedOnly = True
 process.dynGroomedPFJets.chargedOnly = True
 
 #replace b-hadron decays by the parent
-process.load("RecoHI.HiJetAlgos.GenHFHadronReplacer_cfi")
-process.genJetSequence.insert(0,process.GenHFHadronReplacer)
-process.genParticlesForJets.src = 'GenHFHadronReplacer'
+process.load("RecoHI.HiJetAlgos.CheatHFHadronReplacer_cfi")
+process.genJetSequence.insert(0,process.CheatHFHadronReplacer)
+process.genParticlesForJets.src = 'CheatHFHadronReplacer'
 
