@@ -71,7 +71,7 @@ CheatHFHadronReplacer::CheatHFHadronReplacer(const edm::ParameterSet& cfg)
 
 // ------------ method called to produce the data  ------------
 void CheatHFHadronReplacer::produce(edm::StreamID, edm::Event &evt, const edm::EventSetup &setup) const {
-  std::cout << "Event being processed..." << std::endl;
+  //std::cout << "Event being processed..." << std::endl;
 
   edm::Handle<reco::GenParticleCollection> genParticles;
   evt.getByToken(genParticlesToken_, genParticles);
@@ -86,18 +86,18 @@ void CheatHFHadronReplacer::produce(edm::StreamID, edm::Event &evt, const edm::E
     if(isFinalB(genPart)){
       // Add the B
       outputCollection->push_back(genPart);
-      std::cout << "Found a B!" << std::endl;
+      //std::cout << "Found a B!" << std::endl;
       // Add the daughters to the output collection
       reco::GenParticleCollection daughterCollection = {};
       daughterCollection = addDaughters(genPart, daughterCollection, bCode);
-      std::cout << "Daughters added to collection : " << daughterCollection.size() << std::endl;
+      //std::cout << "Daughters added to collection : " << daughterCollection.size() << std::endl;
       (*outputCollection).insert((*outputCollection).end(), daughterCollection.begin(), daughterCollection.end());
       bCode += 100;
     }
     if (genPart.status()!=1) continue;
     // Skip b daughters
     if (isFromB(genPart)) {
-      std::cout << "Found from B!" << std::endl;
+      //std::cout << "Found from B!" << std::endl;
       fromBs++;
       continue;	
     }
@@ -105,8 +105,8 @@ void CheatHFHadronReplacer::produce(edm::StreamID, edm::Event &evt, const edm::E
     
     outputCollection->push_back(genPart);
   }
-  std::cout << "particles fromB found (skipped) : " << fromBs << std::endl;
-  std::cout << "Total particles in collection: " << (*outputCollection).size() << std::endl;
+  //std::cout << "particles fromB found (skipped) : " << fromBs << std::endl;
+  //std::cout << "Total particles in collection: " << (*outputCollection).size() << std::endl;
   evt.put(std::move(outputCollection));
 }
 
@@ -189,7 +189,7 @@ reco::GenParticleCollection CheatHFHadronReplacer::addDaughters(const reco::Cand
     const reco::Candidate& daughter = *particle.daughter(i);
     
     if (daughter.status() == 1) {
-      std::cout << "Found a daughter!" << std::endl;
+      //std::cout << "Found a daughter!" << std::endl;
       daughterCollection.push_back(reco::GenParticle(daughter.charge(), daughter.p4(), daughter.vertex(), daughter.pdgId(), bCode, true));
       //daughterCollection.push_back(reco::GenParticle(daughter));
     }

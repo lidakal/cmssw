@@ -181,7 +181,7 @@ ak4PFSubJetPfDeepCSVTagInfos = ak4PFPfDeepCSVTagInfos.clone(
 
 ak4PFPfDeepCSVSubJetTags = ak4PFPfDeepCSVJetTags.clone(src = "ak4PFSubJetPfDeepCSVTagInfos")
 '''
-ak4PFpatSubJetsWithBtagging = patJets.clone(jetSource = "akSoftDrop4PFJets:SubJets",
+ak4PFpatSubJetsWithBtagging = patJets.clone(jetSource = "dynGroomedPFJets:SubJets",
         genJetMatch          = cms.InputTag("NULL"),
         genPartonMatch       = cms.InputTag("NULL"),
         jetCorrFactorsSource = cms.VInputTag(cms.InputTag("NULL")),
@@ -245,6 +245,9 @@ ak4PFJetAnalyzer = inclusiveJetAnalyzer.clone(jetTag = cms.InputTag("ak4PFpatJet
 
 
 
+from RecoHI.HiJetAlgos.dynGroomedPFJets_cfi import *
+
+
 ak4PFJetSequence_mc = cms.Sequence(
     ak4PFmatch*
     ak4PFparton*
@@ -252,6 +255,7 @@ ak4PFJetSequence_mc = cms.Sequence(
     ak4PFPatJetFlavourId*  
     ak4PFJetTracksAssociatorAtVertex*                                                 
     ak4PFJetBtagging*
+    dynGroomedPFJets*
     ak4PFpatJetsWithBtagging*
     #ak4PFPatSubJetFlavourAssociation*
     #ak4PFSubJetPfImpactParameterTagInfos *
@@ -275,5 +279,5 @@ ak4PFJetSequence = cms.Sequence(ak4PFJetSequence_mc)
 ### extra substructure stuff
 ak4PFJetAnalyzer.doSubJets = True
 ak4PFJetAnalyzer.doGenSubJets = True
-ak4PFJetAnalyzer.groomedJets = 'akSoftDrop4PFJets'
-ak4PFJetAnalyzer.groomedGenJets = cms.InputTag('akSoftDrop4GenJets')
+ak4PFJetAnalyzer.groomedJets = 'dynGroomedPFJets'
+ak4PFJetAnalyzer.groomedGenJets = cms.InputTag('dynGroomedGenJets')

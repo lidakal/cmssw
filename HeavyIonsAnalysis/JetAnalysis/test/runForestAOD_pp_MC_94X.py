@@ -209,7 +209,7 @@ process.ana_step = cms.Path(
 )
 
 #####################################################################################
-'''
+
 # edm output for debugging purposes
 process.output = cms.OutputModule(
     "PoolOutputModule",
@@ -223,7 +223,7 @@ process.output = cms.OutputModule(
     )
 
 process.output_path = cms.EndPath(process.output)
-'''
+
 
 #########################
 # Event Selection
@@ -267,17 +267,6 @@ process.pAna = cms.EndPath(process.skimanalysis)
 # write heavy stuff for debugging b-tagging
 process.ak4PFJetAnalyzer.doLifeTimeTaggingExtra = True
 
-# dynamical grooming code
-process.load("RecoHI.HiJetAlgos.dynGroomedGenJets_cfi")
-process.load("RecoHI.HiJetAlgos.dynGroomedPFJets_cfi")
-
-process.genJetSequence.replace(process.akSoftDrop4GenJets, process.dynGroomedGenJets)
-process.jetSequence.replace(process.akSoftDrop4PFJets, process.dynGroomedPFJets)
-
-from Configuration.Applications.ConfigBuilder import MassReplaceInputTag
-MassReplaceInputTag(process, new="dynGroomedGenJets", old="akSoftDrop4GenJets")
-MassReplaceInputTag(process, new="dynGroomedPFJets", old="akSoftDrop4PFJets")
-MassReplaceInputTag(process, new="dynGroomedPFJets:SubJets", old="akSoftDrop4PFJets:SubJets")
 #option to do late soft drop
 process.dynGroomedGenJets.doLateSD = False
 process.dynGroomedPFJets.doLateSD = False
@@ -296,5 +285,5 @@ process.load("RecoHI.HiJetAlgos.CheatHFHadronReplacer_cfi")
 process.genJetSequence.insert(0,process.CheatHFHadronReplacer)
 process.genParticlesForJets.src = 'CheatHFHadronReplacer'
 
-process.load("RecoHI.HiJetAlgos.RecoHFHadronReplacer_cfi")
-process.jetSequence+=process.RecoHFHadronReplacer
+#process.load("RecoHI.HiJetAlgos.RecoHFHadronReplacer_cfi")
+#process.jetSequence+=process.RecoHFHadronReplacer

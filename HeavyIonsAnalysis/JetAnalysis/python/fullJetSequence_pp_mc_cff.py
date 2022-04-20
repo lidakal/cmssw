@@ -24,6 +24,8 @@ genPartonsForJets.ignoreParticleIDs += [11,13,22,130,211,310,321,2212,2112,2114]
 ak4PartonJets = ak4GenJets.clone(src = 'genPartonsForJets')
 akSoftDrop4PartonJets = akSoftDrop4GenJets.clone(src = 'genPartonsForJets')
 
+from RecoHI.HiJetAlgos.dynGroomedGenJets_cfi import *
+
 genJetSequence = cms.Sequence(
     selectedHadronsAndPartons + 
     genParticlesForJets +
@@ -33,7 +35,8 @@ genJetSequence = cms.Sequence(
     #ak4GenJetFlavourInfos + 
     #matchGenBHadron +
     ak4PartonJets + 
-    akSoftDrop4GenJets +
+    dynGroomedGenJets +
+    #akSoftDrop4GenJets +
     akSoftDrop4PartonJets #+
     #ak3GenNjettiness +
     #ak4GenNjettiness
@@ -43,7 +46,7 @@ jetSequence = cms.Sequence(
     # ak4CaloJets +
     #ak3PFJets +
     # ak4PFJets +
-    akSoftDrop4PFJets +
+    #akSoftDrop4PFJets +
     highPurityTracks +
     ak4PFJetSequence #+
     #akSoftDrop4PFJetSequence 

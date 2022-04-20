@@ -32,6 +32,16 @@
 
 #include "RecoJets/JetProducers/interface/JetSpecific.h"
 
+#include "DataFormats/VertexReco/interface/Vertex.h"
+#include "DataFormats/BTauReco/interface/JetTag.h"
+#include "DataFormats/BTauReco/interface/ShallowTagInfo.h"
+#include "CommonTools/UtilAlgos/interface/DeltaR.h"
+#include "DataFormats/VertexReco/interface/VertexFwd.h"
+#include "DataFormats/BTauReco/interface/SecondaryVertexTagInfo.h"
+#include "DataFormats/TrackReco/interface/Track.h"
+
+#include "DataFormats/HepMCCandidate/interface/GenParticle.h"
+
 using namespace edm;
 using namespace std;
 using namespace reco;
@@ -49,10 +59,14 @@ private:
   void produce(StreamID, Event&, const EventSetup&) const override;
 
   bool IterativeDeclustering(const T&, PseudoJet *, PseudoJet *, vector<PseudoJet> &, vector<PseudoJet> &) const;
+  bool IterativeDeclustering(const T&, vector<CandidatePtr>, PseudoJet *, PseudoJet *, vector<PseudoJet> &, vector<PseudoJet> &) const;
+
   BasicJet ConvertFJ2BasicJet(PseudoJet *fj, vector<PseudoJet>, Handle<PFCandidateCollection>, const EventSetup& iSetup) const;
 
   EDGetTokenT<View<T> > jetSrc_;
   EDGetTokenT<PFCandidateCollection> constitSrc_;
+  EDGetTokenT<View<BaseTagInfo>> tagInfoSrc_;
+  EDGetTokenT<vector<GenParticle>> genParticleSrc_;
   bool writeConstits_;
   bool doLateSD_;
   bool chargedOnly_;
@@ -66,6 +80,8 @@ template <class T>
 dynGroomedJets<T>::dynGroomedJets(const ParameterSet& iConfig)
   : jetSrc_(consumes<View<T> >(iConfig.getParameter<InputTag>("jetSrc"))),
     constitSrc_(mayConsume<PFCandidateCollection >(iConfig.getParameter<InputTag>("constitSrc"))),
+    tagInfoSrc_(mayConsume<View<BaseTagInfo>>(iConfig.getParameter<InputTag>("ak4PFPfImpactParameterTagInfos"))),
+    genParticleSrc_(mayConsume<vector<GenParticle>>(iConfig.getParameter<InputTag>("CheatHFHadronReplacer"))),
     writeConstits_(iConfig.getParameter<bool>("writeConstits")),
     doLateSD_(iConfig.getParameter<bool>("doLateSD")),
     chargedOnly_(iConfig.getParameter<bool>("chargedOnly")),
@@ -100,8 +116,14 @@ void dynGroomedJets<T>::produce(StreamID, Event& iEvent, const EventSetup& iSetu
   Handle<PFCandidateCollection> pfcands;
   iEvent.getByToken(constitSrc_, pfcands);
  
-  indices.resize(pfjets->size());
+  Handle<View<BaseTagInfo>> ipTagInfoHandle;
+  if (typeid(T) == typeid(reco::PFJet)) iEvent.getByToken(tagInfoSrc_, ipTagInfoHandle);
 
+  Handle<vector<GenParticle>> genParticles;
+  if (typeid(T) == typeid(reco::PFJet)) iEvent.getByToken(genParticleSrc_, genParticles);
+
+
+  indices.resize(pfjets->size());
 
   int jetIndex = 0;
   for (const T& pfjet : *pfjets) {
@@ -113,7 +135,27 @@ void dynGroomedJets<T>::produce(StreamID, Event& iEvent, const EventSetup& iSetu
     vector<PseudoJet> constit1;
     vector<PseudoJet> constit2;
 
-    isHardest.push_back(IterativeDeclustering(pfjet,subFJ1,subFJ2,constit1,constit2));
+    if (typeid(T) == typeid(reco::PFJet)) { 
+
+      const edm::View<reco::BaseTagInfo> &ipTagInfos = *ipTagInfoHandle;
+      const edm::RefToBase<Jet>& ipJetRef = ipTagInfos[jetIndex].jet();
+
+      const reco::IPTagInfo<std::vector<CandidatePtr>, JetTagInfo>* ipTagInfo =
+	dynamic_cast<const reco::IPTagInfo<vector<CandidatePtr>, JetTagInfo>*>(&ipTagInfos[jetIndex]);
+
+      vector<reco::CandidatePtr> ipTracks = ipTagInfo->selectedTracks();
+      //cout<<" nsel tracks "<<ipTracks.size()<<endl;
+      //cout<<" nsel tracks = "<<ipTagInfo->selectedTracks().size()<<endl;
+      isHardest.push_back(IterativeDeclustering(pfjet,ipTracks,subFJ1,subFJ2,constit1,constit2));
+
+      for(auto genParticle : *genParticles){
+	cout<<" I'm a gen particle "<<genParticle.phi()<<endl;
+      }
+
+    }
+    else{
+      isHardest.push_back(IterativeDeclustering(pfjet,subFJ1,subFJ2,constit1,constit2));
+    }
     //cout<<" jet pT = "<<pfjet.pt()<<" sj1 pT = "<<subFJ1->pt()<<" sj2 pT = "<<subFJ2->pt()<<endl;
     
     BasicJet subjet1 = ConvertFJ2BasicJet(subFJ1, constit1, pfcands, iSetup);
@@ -182,7 +224,7 @@ BasicJet dynGroomedJets<T>::ConvertFJ2BasicJet(PseudoJet *fj, vector<PseudoJet> 
 	
 	if(fabs(constitPt - pfcand.pt()) < 0.0001 && fabs(constitEta - pfcand.eta()) <0.0001 ){
 	  foundMatch = true;
-	  constituents.push_back(reco::CandidatePtr(pfcands, iCand));
+	  constituents.push_back(CandidatePtr(pfcands, iCand));
 	  break;
 	}
       }
@@ -196,6 +238,102 @@ BasicJet dynGroomedJets<T>::ConvertFJ2BasicJet(PseudoJet *fj, vector<PseudoJet> 
   return basicjet;
 
 }
+
+
+template <class T>
+bool dynGroomedJets<T>::IterativeDeclustering(const T& jet, vector<CandidatePtr> ipTracks, PseudoJet *sub1, PseudoJet *sub2, vector<PseudoJet> &constit1, vector<PseudoJet> &constit2) const
+{
+
+
+  bool flagSubjet=false;
+  bool isHardest=false;
+  double kt1=-1;
+  double nsplit=0;
+  double nsel=0;
+  double nsdin=-1;
+  double jet_radius_ca = 1.0;
+  JetDefinition jet_def(genkt_algorithm,jet_radius_ca,0,static_cast<RecombinationScheme>(0), Best);
+
+  // Reclustering jet constituents with new algorithm                                                                                          
+  
+  try
+    {
+      vector<PseudoJet> particles;
+
+      int nCharged = 0;
+      auto daughters = jet.getJetConstituents();
+      //std::cout<<" nConst "<<daughters.size()<<std::endl;
+	
+      for(auto it = daughters.begin(); it!=daughters.end(); ++it){
+	if(chargedOnly_ && (**it).charge() == 0) continue;
+	if((**it).pt()<1.0) continue;
+	float eps = 0.001;
+	bool foundTrack = false;
+	cout<<" daughter pT "<<(**it).pt()<<endl;
+	for(auto trk : ipTracks){
+	  if(fabs(trk->eta()-(**it).eta())>eps) continue;
+	  if(acos(cos(trk->phi()-(**it).phi()))>eps) continue;
+	  foundTrack = true;
+	  break;
+	}
+	cout<<"foundTrack = "<<foundTrack<<endl;
+	if(!foundTrack) continue;
+	particles.push_back(PseudoJet((**it).px(), (**it).py(), (**it).pz(), (**it).energy()));
+	nCharged++;
+      }
+      //std::cout<<" nCharged =  "<<nCharged<<std::endl;
+      if(nCharged == 0) return false;
+      ClusterSequence csiter(particles, jet_def);
+      vector<PseudoJet> output_jets = csiter.inclusive_jets(0);
+      output_jets = sorted_by_pt(output_jets);
+      
+      
+      PseudoJet jj = output_jets[0];
+      PseudoJet j1;
+      PseudoJet j2;                                                                                                               
+      PseudoJet j1first;
+      PseudoJet j2first;
+      
+      while(jj.has_parents(j1,j2))
+	{
+	  
+	  if(j1.perp() < j2.perp()) swap(j1,j2);
+	  
+	  double delta_R = j1.delta_R(j2);
+	  double cut=zcut_*pow(delta_R/rParam_,beta_);
+	  double z=j2.perp()/(j1.perp()+j2.perp());
+	  if(z > cut && (doLateSD_ || !flagSubjet) ){
+	    flagSubjet=true;
+	    j1first =j1;
+	    j2first =j2;
+	    *sub1 = j1first;
+	    *sub2 = j2first;
+	    nsdin=nsplit;
+	  }
+	  double dyn=z*(1-z)*j2.perp()*pow(delta_R/rParam_,dynktcut_);
+	  
+	  if(dyn>kt1){
+	    nsel=nsplit;
+	    kt1=dyn;
+	  }
+	  nsplit=nsplit+1;
+	  jj=j1;
+
+	  
+	}
+      
+      if(!flagSubjet) *sub1 = output_jets[0];
+
+      if(sub1->has_constituents()) constit1 = sub1->constituents(); 
+      if(sub2->has_constituents()) constit2 = sub2->constituents(); 
+      if(nsel==nsdin)isHardest = true; 
+    } catch (fastjet::Error) { /*return -1;*/ }
+
+  return isHardest;
+}
+
+
+
 
 template <class T>
 bool dynGroomedJets<T>::IterativeDeclustering(const T& jet, PseudoJet *sub1, PseudoJet *sub2, vector<PseudoJet> &constit1, vector<PseudoJet> &constit2) const
@@ -223,6 +361,8 @@ bool dynGroomedJets<T>::IterativeDeclustering(const T& jet, PseudoJet *sub1, Pse
 	
       for(auto it = daughters.begin(); it!=daughters.end(); ++it){
 	if(chargedOnly_ && (**it).charge() == 0) continue;
+	if((**it).pt()<1.0) continue;
+
 	particles.push_back(PseudoJet((**it).px(), (**it).py(), (**it).pz(), (**it).energy()));
 	nCharged++;
       }
@@ -294,11 +434,15 @@ void dynGroomedJets<T>::fillDescriptions(ConfigurationDescriptions& descriptions
   if (typeid(T) == typeid(reco::PFJet)) {
     desc.add<edm::InputTag>("jetSrc", edm::InputTag("ak4PFJets"));
     desc.add<edm::InputTag>("constitSrc", edm::InputTag("particleFlow"));
+    desc.add<edm::InputTag>("ak4PFPfImpactParameterTagInfos", edm::InputTag("ak4PFPfImpactParameterTagInfos"));
+    desc.add<edm::InputTag>("CheatHFHadronReplacer", edm::InputTag("CheatHFHadronReplacer"));
     descriptions.add("dynGroomedPFJets", desc);
   }
   else if (typeid(T) == typeid(reco::GenJet)) {
     desc.add<edm::InputTag>("jetSrc", edm::InputTag("ak4GenJets"));
     desc.add<edm::InputTag>("constitSrc", edm::InputTag("genParticles"));
+    desc.add<edm::InputTag>("ak4PFPfImpactParameterTagInfos", edm::InputTag("ak4GenJets"));
+    desc.add<edm::InputTag>("CheatHFHadronReplacer", edm::InputTag("ak4GenJets"));
     descriptions.add("dynGroomedGenJets", desc);
   }
 
