@@ -12,6 +12,8 @@
 
 #include <memory>
 #include <vector>
+#include <cmath>
+#include <map>
 
 #include "FWCore/Framework/interface/Frameworkfwd.h"
 #include "FWCore/Framework/interface/global/EDProducer.h"
@@ -39,6 +41,7 @@
 #include "DataFormats/VertexReco/interface/VertexFwd.h"
 #include "DataFormats/BTauReco/interface/SecondaryVertexTagInfo.h"
 #include "DataFormats/TrackReco/interface/Track.h"
+#include "DataFormats/JetReco/interface/Jet.h"
 
 #include "DataFormats/HepMCCandidate/interface/GenParticle.h"
 
@@ -57,11 +60,15 @@ public:
 
 private:
   void produce(StreamID, Event&, const EventSetup&) const override;
-
+  // Still used for gen jets
+  // PseudoJet is fastjet::PseudoJet
   bool IterativeDeclustering(const T&, PseudoJet *, PseudoJet *, vector<PseudoJet> &, vector<PseudoJet> &) const;
-  bool IterativeDeclustering(const T&, vector<CandidatePtr>, PseudoJet *, PseudoJet *, vector<PseudoJet> &, vector<PseudoJet> &) const;
+  // Used for reco jets (vector<CandidatePtr> are the tracks)
+  bool IterativeDeclustering(const T&, vector<CandidatePtr>, reco::GenParticleCollection, PseudoJet *, PseudoJet *, vector<PseudoJet> &, vector<PseudoJet> &) const;
 
   BasicJet ConvertFJ2BasicJet(PseudoJet *fj, vector<PseudoJet>, Handle<PFCandidateCollection>, const EventSetup& iSetup) const;
+
+  int trkGenPartMatch(reco::Jet::Constituent constituent, reco::GenParticleCollection genParticles, double ptCut) const;
 
   EDGetTokenT<View<T> > jetSrc_;
   EDGetTokenT<PFCandidateCollection> constitSrc_;
@@ -119,6 +126,7 @@ void dynGroomedJets<T>::produce(StreamID, Event& iEvent, const EventSetup& iSetu
   Handle<View<BaseTagInfo>> ipTagInfoHandle;
   if (typeid(T) == typeid(reco::PFJet)) iEvent.getByToken(tagInfoSrc_, ipTagInfoHandle);
 
+  // std::vector<reco::GenParticle> = reco::GenParticleCollection typedef in GenParticleFwd.h
   Handle<vector<GenParticle>> genParticles;
   if (typeid(T) == typeid(reco::PFJet)) iEvent.getByToken(genParticleSrc_, genParticles);
 
@@ -146,11 +154,14 @@ void dynGroomedJets<T>::produce(StreamID, Event& iEvent, const EventSetup& iSetu
       vector<reco::CandidatePtr> ipTracks = ipTagInfo->selectedTracks();
       //cout<<" nsel tracks "<<ipTracks.size()<<endl;
       //cout<<" nsel tracks = "<<ipTagInfo->selectedTracks().size()<<endl;
-      isHardest.push_back(IterativeDeclustering(pfjet,ipTracks,subFJ1,subFJ2,constit1,constit2));
+      isHardest.push_back(IterativeDeclustering(pfjet,ipTracks,*genParticles,subFJ1,subFJ2,constit1,constit2));
+      /*
+	// to loop over gen particles
 
-      for(auto genParticle : *genParticles){
+      for(auto genParticle : *genParticles) {
 	cout<<" I'm a gen particle "<<genParticle.phi()<<endl;
       }
+      */
 
     }
     else{
@@ -218,7 +229,7 @@ BasicJet dynGroomedJets<T>::ConvertFJ2BasicJet(PseudoJet *fj, vector<PseudoJet> 
       
       bool foundMatch = false;
       int iCand = -1;
-      
+      if (foundMatch) {} // so the compiler does not complain that it is not used
       for (const PFCandidate& pfcand : *pfcands) {
 	iCand++;
 	
@@ -228,7 +239,7 @@ BasicJet dynGroomedJets<T>::ConvertFJ2BasicJet(PseudoJet *fj, vector<PseudoJet> 
 	  break;
 	}
       }
-      if(!foundMatch) cout<<" couldn't find match "<<endl;
+      //if(!foundMatch) cout<<" couldn't find match "<<endl;
     }
   }
 
@@ -241,7 +252,7 @@ BasicJet dynGroomedJets<T>::ConvertFJ2BasicJet(PseudoJet *fj, vector<PseudoJet> 
 
 
 template <class T>
-bool dynGroomedJets<T>::IterativeDeclustering(const T& jet, vector<CandidatePtr> ipTracks, PseudoJet *sub1, PseudoJet *sub2, vector<PseudoJet> &constit1, vector<PseudoJet> &constit2) const
+bool dynGroomedJets<T>::IterativeDeclustering(const T& jet, vector<CandidatePtr> ipTracks, reco::GenParticleCollection genParticles, PseudoJet *sub1, PseudoJet *sub2, vector<PseudoJet> &constit1, vector<PseudoJet> &constit2) const
 {
 
 
@@ -259,30 +270,62 @@ bool dynGroomedJets<T>::IterativeDeclustering(const T& jet, vector<CandidatePtr>
   try
     {
       vector<PseudoJet> particles;
+      std::map<int, reco::Jet::Constituents> pseudoBs;
 
       int nCharged = 0;
+      // getJetConstituents() returns std::vector<reco::Jet::Constituent> where reco::Jet::Constituent = edm::Ptr<Candidate>
       auto daughters = jet.getJetConstituents();
-      //std::cout<<" nConst "<<daughters.size()<<std::endl;
-	
-      for(auto it = daughters.begin(); it!=daughters.end(); ++it){
-	if(chargedOnly_ && (**it).charge() == 0) continue;
-	if((**it).pt()<1.0) continue;
+      //std::cout<< "Constituents in jet: " << daughters.size() << std::endl;
+
+      //cout << "new jet" << endl;
+      // daughters is a vector of pointers
+      for(reco::Jet::Constituent daughter : daughters) {
+	if(chargedOnly_ && daughter->charge() == 0) continue;
+	if(daughter->pt()<1.0) continue;
 	float eps = 0.001;
 	bool foundTrack = false;
-	cout<<" daughter pT "<<(**it).pt()<<endl;
+	//cout<<" daughter pT "<<daughter->pt()<<endl;
 	for(auto trk : ipTracks){
-	  if(fabs(trk->eta()-(**it).eta())>eps) continue;
-	  if(acos(cos(trk->phi()-(**it).phi()))>eps) continue;
+	  if(fabs(trk->eta()-daughter->eta())>eps) continue;
+	  if(acos(cos(trk->phi()-daughter->phi()))>eps) continue;
 	  foundTrack = true;
 	  break;
 	}
-	cout<<"foundTrack = "<<foundTrack<<endl;
+	//cout<< "foundTrack = " << foundTrack << endl;
 	if(!foundTrack) continue;
-	particles.push_back(PseudoJet((**it).px(), (**it).py(), (**it).pz(), (**it).energy()));
+	// add particle matching, skip particles matched as B decay prods
+	// collect all B constituents
+	int trkStatus = trkGenPartMatch(daughter, genParticles, 1.);
+	//cout << "trkStatus : " << trkStatus << endl;
+	if (trkStatus < 0) continue; // skip tracks with no match - impossible at the moment
+	if (trkStatus >= 100) {
+	  pseudoBs[trkStatus].push_back(daughter);
+	  //std::cout << "Found B product with status " << trkStatus << std::endl;
+	  nCharged++;
+	}
+	if (trkStatus > 1) continue;
+	particles.push_back(PseudoJet(daughter->px(), daughter->py(), daughter->pz(), daughter->energy()));
 	nCharged++;
       }
+
+      for (auto it = pseudoBs.begin(); it != pseudoBs.end(); ++it) {
+	double px = 0;
+	double py = 0;
+	double pz = 0;
+	double energy = 0;
+	for (reco::Jet::Constituent bDaughter : it->second) {
+	  px += bDaughter->px();
+	  py += bDaughter->py();
+	  pz += bDaughter->pz();
+	  energy += bDaughter->energy();
+	}
+	//cout << "Added B to particles" << endl;
+	particles.push_back(PseudoJet(px, py, pz, energy));
+      }
+
       //std::cout<<" nCharged =  "<<nCharged<<std::endl;
       if(nCharged == 0) return false;
+      //cout << "jet kept" << endl;
       ClusterSequence csiter(particles, jet_def);
       vector<PseudoJet> output_jets = csiter.inclusive_jets(0);
       output_jets = sorted_by_pt(output_jets);
@@ -446,6 +489,40 @@ void dynGroomedJets<T>::fillDescriptions(ConfigurationDescriptions& descriptions
     descriptions.add("dynGroomedGenJets", desc);
   }
 
+}
+
+//reco::Jet::Constituent aka edm::Ptr<reco::Candidate> is a pointer
+template <class T>
+int dynGroomedJets<T>::trkGenPartMatch(reco::Jet::Constituent constituent, reco::GenParticleCollection genParticles, double ptCut) const
+{
+  // return status of matched particle
+  int status = -1;
+  
+  double dRmin = 100.;
+  double dR = dRmin;
+
+  double trkEta = constituent->eta();
+  double trkPhi = constituent->phi();
+
+  for (reco::GenParticle genParticle : genParticles) {
+    double partPt = genParticle.pt();
+    //cout << "genParticle status: " << genParticle.status() << endl;
+    if (partPt < ptCut) continue;
+
+    double partEta = genParticle.eta();
+    double partPhi = genParticle.phi();
+
+    double dEta = trkEta - partEta;
+    double dPhi = std::acos(std::cos(trkPhi - partPhi));
+
+    dR = std::sqrt((dEta * dEta) + (dPhi * dPhi));
+
+    if (dR < dRmin) {
+      dRmin = dR;
+      status = genParticle.status();
+    }
+  }
+  return status;  
 }
 
 
