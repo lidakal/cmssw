@@ -61,15 +61,22 @@ public:
 private:
   void produce(StreamID, Event&, const EventSetup&) const override;
 
+  // ------------- Iterative declustering ------
+  bool IterativeDeclustering(const T& jet, float ptCut, 
+                                  fastjet::PseudoJet *sub1, fastjet::PseudoJet *sub2, 
+                                  std::vector<fastjet::PseudoJet> &constit1, std::vector<fastjet::PseudoJet> &constit2) const;
   //bool IterativeDeclustering(const T&, fastjet::PseudoJet *, fastjet::PseudoJet *, std::vector<fastjet::PseudoJet> &, std::vector<fastjet::PseudoJet> &) const;
-  
-  bool IterativeDeclusteringGen(const T& jet, reco::GenParticleCollection genParticles, float ptCut, fastjet::PseudoJet *, fastjet::PseudoJet *, std::vector<fastjet::PseudoJet> &, std::vector<fastjet::PseudoJet> &) const;
-
   //bool IterativeDeclustering(const T& pfjet, std::vector<CandidatePtr> ipTracks, reco::GenParticleCollection genParticles, PseudoJet *, PseudoJet *, vector<PseudoJet> &, vector<PseudoJet> &) const;
-
-  bool IterativeDeclusteringReco(const T& jet, std::vector<reco::CandidatePtr>& ipTracks, std::vector<reco::CandidatePtr>& svTracks, float ptCut, fastjet::PseudoJet *sub1, fastjet::PseudoJet *sub2, std::vector<fastjet::PseudoJet> &constit1, std::vector<fastjet::PseudoJet> &constit2) const;
-
   //bool IterativeDeclustering(const T&, vector<CandidatePtr>, vector<CandidatePtr>, PseudoJet *, PseudoJet *, vector<PseudoJet> &, vector<PseudoJet> &) const;
+
+  // ------------- Iterative declustering with B aggregation ------
+  bool IterativeDeclusteringReco(const T& jet, std::vector<reco::CandidatePtr>& ipTracks, std::vector<reco::CandidatePtr>& svTracks, float ptCut, 
+                                  fastjet::PseudoJet *sub1, fastjet::PseudoJet *sub2, 
+                                  std::vector<fastjet::PseudoJet> &constit1, std::vector<fastjet::PseudoJet> &constit2) const;
+
+  bool IterativeDeclusteringGen(const T& jet, reco::GenParticleCollection genParticles, float ptCut, 
+                                  fastjet::PseudoJet *sub1, fastjet::PseudoJet *sub2, 
+                                  std::vector<fastjet::PseudoJet> &constit1, std::vector<fastjet::PseudoJet> &constit2) const;
 
   BasicJet ConvertFJ2BasicJet(PseudoJet *fj, vector<PseudoJet>, Handle<PFCandidateCollection>, const EventSetup& iSetup) const;
 
@@ -85,6 +92,7 @@ private:
   bool writeConstits_;
   bool doLateSD_;
   bool chargedOnly_;
+  bool aggregateB_;
   double zcut_;
   double beta_;
   double dynktcut_;
@@ -101,6 +109,7 @@ dynGroomedJets<T>::dynGroomedJets(const ParameterSet& iConfig)
     writeConstits_(iConfig.getParameter<bool>("writeConstits")),
     doLateSD_(iConfig.getParameter<bool>("doLateSD")),
     chargedOnly_(iConfig.getParameter<bool>("chargedOnly")),
+    aggregateB_(iConfig.getParameter<bool>("aggregateB")),
     zcut_(iConfig.getParameter<double>("zcut")),
     beta_(iConfig.getParameter<double>("beta")),
     dynktcut_(iConfig.getParameter<double>("dynktcut")),
@@ -173,61 +182,46 @@ void dynGroomedJets<T>::produce(StreamID, Event& iEvent, const EventSetup& iSetu
     vector<PseudoJet> constit2;
 
     if (typeid(T) == typeid(reco::PFJet)) { 
-      /* 
-	 For reco jets, aggregate all tracks associated 
-	 to any SV in the jet in a single particle for 
-	 declustering
-      */
-
-      //cout << "reco jet" << endl;
-      /*
-      const edm::View<reco::BaseTagInfo> &ipTagInfos = *ipTagInfoHandle;
-      const edm::RefToBase<Jet>& ipJetRef = ipTagInfos[jetIndex].jet();
-      const reco::IPTagInfo<std::vector<CandidatePtr>, JetTagInfo>* ipTagInfo =
-	dynamic_cast<const reco::IPTagInfo<vector<CandidatePtr>, JetTagInfo>*>(&ipTagInfos[jetIndex]);
-      */
-
-      // Get SV tag info for jet
-      const std::vector<reco::CandSecondaryVertexTagInfo>& svTagInfos = *svTagInfoHandle;
-      const reco::CandSecondaryVertexTagInfo& svTagInfo = svTagInfos[jetIndex];
-      //const reco::JetBaseRef svJetRef = svTagInfo.jet();
-      // Get IP tag info for jet
-      const reco::CandIPTagInfo ipTagInfo = *(svTagInfo.trackIPTagInfoRef().get());
-      //const reco::JetBaseRef ipJetRef = ipTagInfo->jet();
-
-      //std::cout << "pfjet eta: " << pfjet.eta() << std::endl;
-      //std::cout << "pfjet phi: " << pfjet.phi() << std::endl;
-      
-
       /*
       // Check that they are all pointing to the same jet
+      cout << "reco jet" << endl;
       std::cout << "pfjet px: " << pfjet.px() << std::endl;
       std::cout << "sv jet px: " << svJetRef->px() << std::endl;
       std::cout << "ip jet px: " << ipJetRef->px() << std::endl;
+
+      const edm::View<reco::BaseTagInfo> &ipTagInfos = *ipTagInfoHandle;
+      const edm::RefToBase<Jet>& ipJetRef = ipTagInfos[jetIndex].jet();
+      const reco::IPTagInfo<std::vector<CandidatePtr>, JetTagInfo>* ipTagInfo =
+	                dynamic_cast<const reco::IPTagInfo<vector<CandidatePtr>, JetTagInfo>*>(&ipTagInfos[jetIndex]);
       */
 
-      std::vector<reco::CandidatePtr> ipTracks = ipTagInfo.selectedTracks();
-      std::vector<reco::CandidatePtr> svTracks = svTagInfo.vertexTracks();
+      if (aggregateB_) {
+        // Grab IP and SV tag info for jet
+        const std::vector<reco::CandSecondaryVertexTagInfo>& svTagInfos = *svTagInfoHandle;
+        const reco::CandSecondaryVertexTagInfo& svTagInfo = svTagInfos[jetIndex];
+        const reco::CandIPTagInfo ipTagInfo = *(svTagInfo.trackIPTagInfoRef().get());
+        std::vector<reco::CandidatePtr> ipTracks = ipTagInfo.selectedTracks();
+        std::vector<reco::CandidatePtr> svTracks = svTagInfo.vertexTracks();
 
-      // If we want to do something per-vertex, we might want to pass the whole svTagInfo to Iterative declustering
-
-      isHardest.push_back(IterativeDeclusteringReco(pfjet, ipTracks, svTracks, ptCut, subFJ1, subFJ2, constit1, constit2));
+        // If we want to do something per-vertex, we might want to pass the whole svTagInfo to Iterative declustering
+        isHardest.push_back(IterativeDeclusteringReco(pfjet, ipTracks, svTracks, ptCut, subFJ1, subFJ2, constit1, constit2));
+      } else {
+        isHardest.push_back(IterativeDeclustering(pfjet, ptCut, subFJ1, subFJ2, constit1, constit2));
+      }
     }
     else{
-      /* 
-	 For gen jets, match gen tracks to gen particles
-	 (should be exact matches) and aggregate particles
-	 coming from the same B hadron
+      /*
+      cout << "gen jet" << endl;
       */
-
-      //cout << "gen jet" << endl;
-      //std::cout << "pfjet eta: " << pfjet.eta() << std::endl;
-      //std::cout << "pfjet phi: " << pfjet.phi() << std::endl;
       
-      isHardest.push_back(IterativeDeclusteringGen(pfjet, *genParticles, ptCut, subFJ1, subFJ2, constit1, constit2));
+      if (aggregateB_) {
+        isHardest.push_back(IterativeDeclusteringGen(pfjet, *genParticles, ptCut, subFJ1, subFJ2, constit1, constit2));
+      } else {
+        isHardest.push_back(IterativeDeclustering(pfjet, ptCut, subFJ1, subFJ2, constit1, constit2));
+      }
     }
-    //cout<<" jet pT = "<<pfjet.pt()<<" sj1 pT = "<<subFJ1->pt()<<" sj2 pT = "<<subFJ2->pt()<<endl;
-    
+
+    // Convert fastjets to basicjets    
     BasicJet subjet1 = ConvertFJ2BasicJet(subFJ1, constit1, pfcands, iSetup);
     BasicJet subjet2 = ConvertFJ2BasicJet(subFJ2, constit2, pfcands, iSetup);
 
@@ -309,6 +303,7 @@ BasicJet dynGroomedJets<T>::ConvertFJ2BasicJet(PseudoJet *fj, vector<PseudoJet> 
 
 }
 /*
+
 template <class T>
 bool dynGroomedJets<T>::IterativeDeclustering(const T& jet, vector<CandidatePtr> ipTracks, vector<CandidatePtr> , PseudoJet *, PseudoJet *, vector<PseudoJet> &, vector<PseudoJet> &) const
 {
@@ -561,11 +556,14 @@ bool dynGroomedJets<T>::IterativeDeclustering(const T& jet, vector<CandidatePtr>
 }
 */
 
+
 template <class T>
 bool dynGroomedJets<T>::IterativeDeclusteringReco(const T& jet, std::vector<reco::CandidatePtr>& ipTracks, std::vector<reco::CandidatePtr>& svTracks, float ptCut, fastjet::PseudoJet *sub1, fastjet::PseudoJet *sub2, std::vector<fastjet::PseudoJet> &constit1, std::vector<fastjet::PseudoJet> &constit2) const
 {
-  //cout << "iterativeDeclustering called" << endl;
-
+  /* 
+    Iterative declustering with B aggregation 
+    using SV information for reco jets
+  */
   bool flagSubjet=false;
   bool isHardest=false;
   double kt1=-1;
@@ -576,7 +574,6 @@ bool dynGroomedJets<T>::IterativeDeclusteringReco(const T& jet, std::vector<reco
   JetDefinition jet_def(genkt_algorithm,jet_radius_ca,0,static_cast<RecombinationScheme>(0), Best);
 
   // Reclustering jet constituents with new algorithm                                                                                          
-  
   try
     {      
       // Input particle collection 
@@ -602,58 +599,46 @@ bool dynGroomedJets<T>::IterativeDeclusteringReco(const T& jet, std::vector<reco
       //cout << "new jet" << endl;
 
       for(reco::CandidatePtr daughter : daughters) {
-	// Charge and pt cut
-	if(chargedOnly_ && daughter->charge() == 0) continue;
-	if(daughter->pt() < ptCut) continue;
+        // Charge and pt cut
+        if(chargedOnly_ && daughter->charge() == 0) continue;
+        if(daughter->pt() < ptCut) continue;
 
-	//float eps = 0.001;
+        //float eps = 0.001;
 
-	//cout << "new daughter" << endl;
+        //cout << "new daughter" << endl;
 
-	// Look for track in ipTracks, otherwise discard
-	bool foundTrack = trkInVector(daughter, ipTracks);
-	/*
-	bool foundTrack = false;
-	for(auto trk : ipTracks){
-	  if(fabs(trk->eta()-daughter->eta())>eps) continue;
-	  if(acos(cos(trk->phi()-daughter->phi()))>eps) continue;
-	  foundTrack = true;
-	  break;
-	}
-	*/
-	if(!foundTrack) continue;
+        // Look for track in ipTracks, otherwise discard
+        bool foundTrack = trkInVector(daughter, ipTracks);
+        if(!foundTrack) continue;
 
-	// Look for track in svTracks
-	bool foundTrackInSV = trkInVector(daughter, svTracks);
-	if (foundTrackInSV) { 
-	  bProducts.push_back(daughter);
-	} else {
-	  particles.push_back(PseudoJet(daughter->px(), daughter->py(), daughter->pz(), daughter->energy()));
-	}
-	nCharged++;
+        // Look for track in svTracks
+        bool foundTrackInSV = trkInVector(daughter, svTracks);
+        if (foundTrackInSV) { 
+          bProducts.push_back(daughter);
+        } else {
+          particles.push_back(PseudoJet(daughter->px(), daughter->py(), daughter->pz(), daughter->energy()));
+        }
+        nCharged++;
       }
 
       //cout << "all non B decay products added to particles" << endl;
-
-
       //cout << "tracks associated to any sv : " << bProducts.size() << endl;
 
       // Aggregate all bProducts into a single pseudo-B
       if (bProducts.size() > 0) {
-	double px = 0;
-	double py = 0;
-	double pz = 0;
-	double energy = 0;
-	for (reco::CandidatePtr bProduct : bProducts) {
-	  px += bProduct->px();
-	  py += bProduct->py();
-	  pz += bProduct->pz();
-	  energy += bProduct->energy();
-	}
-
-	//cout << "Added B to particles with " << bProducts.size() << " constituents" << endl;
-	particles.push_back(PseudoJet(px, py, pz, energy));
-	nCharged++;
+        double px = 0;
+        double py = 0;
+        double pz = 0;
+        double energy = 0;
+        for (reco::CandidatePtr bProduct : bProducts) {
+          px += bProduct->px();
+          py += bProduct->py();
+          pz += bProduct->pz();
+          energy += bProduct->energy();
+        }
+        //cout << "Added B to particles with " << bProducts.size() << " constituents" << endl;
+        particles.push_back(PseudoJet(px, py, pz, energy));
+        nCharged++;
       }
 
       if(nCharged == 0)	return false;
@@ -669,34 +654,30 @@ bool dynGroomedJets<T>::IterativeDeclusteringReco(const T& jet, std::vector<reco
       PseudoJet j1first;
       PseudoJet j2first;
       
-      while(jj.has_parents(j1,j2))
-	{
-	  
-	  if(j1.perp() < j2.perp()) swap(j1,j2);
-	  
-	  double delta_R = j1.delta_R(j2);
-	  double cut=zcut_*pow(delta_R/rParam_,beta_);
-	  double z=j2.perp()/(j1.perp()+j2.perp());
-	  if(z > cut && (doLateSD_ || !flagSubjet) ){
-	    flagSubjet=true;
-	    j1first =j1;
-	    j2first =j2;
-	    *sub1 = j1first;
-	    *sub2 = j2first;
-	    nsdin=nsplit;
-	  }
-	  double dyn=z*(1-z)*j2.perp()*pow(delta_R/rParam_,dynktcut_);
-	  
-	  if(dyn>kt1){
-	    nsel=nsplit;
-	    kt1=dyn;
-	  }
-	  nsplit=nsplit+1;
-	  jj=j1;
-
-	  
-	}
-      
+      while(jj.has_parents(j1,j2)) {
+        if(j1.perp() < j2.perp()) swap(j1,j2);
+        
+        double delta_R = j1.delta_R(j2);
+        double cut=zcut_*pow(delta_R/rParam_,beta_);
+        double z=j2.perp()/(j1.perp()+j2.perp());
+        if(z > cut && (doLateSD_ || !flagSubjet) ){
+          flagSubjet=true;
+          j1first =j1;
+          j2first =j2;
+          *sub1 = j1first;
+          *sub2 = j2first;
+          nsdin=nsplit;
+        }
+        double dyn=z*(1-z)*j2.perp()*pow(delta_R/rParam_,dynktcut_);
+        
+        if(dyn>kt1){
+          nsel=nsplit;
+          kt1=dyn;
+        }
+        nsplit=nsplit+1;
+        jj=j1;
+      }
+          
       if(!flagSubjet) *sub1 = output_jets[0];
 
       if(sub1->has_constituents()) constit1 = sub1->constituents(); 
@@ -706,10 +687,12 @@ bool dynGroomedJets<T>::IterativeDeclusteringReco(const T& jet, std::vector<reco
 
   //cout << "sub1 pt: " << sub1->pt() << endl;
   //cout << "sub2 pt: " << sub2->pt() << endl;
-
   return isHardest;
 }
+
 /*
+    // IterativeDeclustering prototype
+
 template <class T>
 bool dynGroomedJets<T>::IterativeDeclustering(const T& jet, PseudoJet *sub1, PseudoJet *sub2, vector<PseudoJet> &constit1, vector<PseudoJet> &constit2) const
 {
@@ -796,6 +779,10 @@ bool dynGroomedJets<T>::IterativeDeclustering(const T& jet, PseudoJet *sub1, Pse
 template <class T>
 bool dynGroomedJets<T>::IterativeDeclusteringGen(const T& jet, reco::GenParticleCollection genParticles, float ptCut, fastjet::PseudoJet *sub1, fastjet::PseudoJet *sub2, std::vector<fastjet::PseudoJet>& constit1, std::vector<fastjet::PseudoJet>& constit2) const
 {
+  /* 
+    Iterative declustering with aggregation
+    of B hadron based on gen particle matching
+  */
   bool flagSubjet = false;
   bool isHardest = false;
   double kt1 = -1;
@@ -825,10 +812,10 @@ bool dynGroomedJets<T>::IterativeDeclusteringGen(const T& jet, reco::GenParticle
     
       // Collect particles coming from B decays, add the rest directly to the collection
       if (genStatus >= 100) {
-	bConstituentsMap[genStatus].push_back(constituent);
+	      bConstituentsMap[genStatus].push_back(constituent);
       } else if (genStatus == 1) {
-	nCharged++;
-	outputConstituents.push_back(PseudoJet(constituent->px(), constituent->py(), constituent->pz(), constituent->energy()));
+        nCharged++;
+        outputConstituents.push_back(PseudoJet(constituent->px(), constituent->py(), constituent->pz(), constituent->energy()));
       }
     }
 
@@ -840,10 +827,10 @@ bool dynGroomedJets<T>::IterativeDeclusteringGen(const T& jet, reco::GenParticle
       double pz = 0;
       double energy = 0;
       for (reco::CandidatePtr bConstituent : it->second) {
-	px += bConstituent->px();
-	py += bConstituent->py();
-	pz += bConstituent->pz();
-	energy += bConstituent->energy();
+        px += bConstituent->px();
+        py += bConstituent->py();
+        pz += bConstituent->pz();
+        energy += bConstituent->energy();
       }
       //cout << "Added B to particles with " << (it->second).size() << "constituents" << endl;
       nCharged++;
@@ -871,32 +858,111 @@ bool dynGroomedJets<T>::IterativeDeclusteringGen(const T& jet, reco::GenParticle
       double cut = zcut_ * pow(delta_R / rParam_,beta_);
       double z = j2.perp() / (j1.perp() + j2.perp());
       if(z > cut && (doLateSD_ || !flagSubjet) ) {
-	flagSubjet=true;
-	j1first = j1;
-	j2first = j2;
-	*sub1 = j1first;
-	*sub2 = j2first;
-	nsdin = nsplit;
+        flagSubjet=true;
+        j1first = j1;
+        j2first = j2;
+        *sub1 = j1first;
+        *sub2 = j2first;
+        nsdin = nsplit;
       }
       double dyn = z * (1-z) * j2.perp() * pow(delta_R / rParam_, dynktcut_);
 	 
       if(dyn > kt1) {
-	nsel = nsplit;
-	kt1 = dyn;
-      }
-      nsplit = nsplit + 1;
-      jj = j1;
-    }
+        nsel = nsplit;
+        kt1 = dyn;
+        }
+        nsplit = nsplit + 1;
+        jj = j1;
+    } 
 
     if(!flagSubjet) *sub1 = output_jets[0];
 
     if (sub1->has_constituents()) constit1 = sub1->constituents(); 
     if (sub2->has_constituents()) constit2 = sub2->constituents(); 
     if (nsel == nsdin) isHardest = true; 
-  } catch (fastjet::Error) { }//return -1; }
-
+  } catch (fastjet::Error) {} // {return -1;}
   //cout << "sub1 pt: " << sub1->pt() << endl;
   //cout << "sub2 pt: " << sub2->pt() << endl;
+  return isHardest;
+}
+
+template <class T>
+bool dynGroomedJets<T>::IterativeDeclustering(const T& jet, float ptCut, PseudoJet *sub1, PseudoJet *sub2, vector<PseudoJet> &constit1, vector<PseudoJet> &constit2) const
+{
+  /*  
+    Iterative declustering with chargedOnly option
+    and pt cut, same for truth and reco jets
+  */
+
+  bool flagSubjet=false;
+  bool isHardest=false;
+  double kt1=-1;
+  double nsplit=0;
+  double nsel=0;
+  double nsdin=-1;
+  double jet_radius_ca = 1.0;
+  JetDefinition jet_def(genkt_algorithm,jet_radius_ca,0,static_cast<RecombinationScheme>(0), Best);
+
+  // Reclustering jet constituents with new algorithm                                                                                          
+  try
+    {
+      vector<PseudoJet> particles;
+      int nCharged = 0;
+      auto daughters = jet.getJetConstituents();
+      //std::cout<<" nConst "<<daughters.size()<<std::endl;
+	
+      for(auto it = daughters.begin(); it!=daughters.end(); ++it){
+          if(chargedOnly_ && (**it).charge() == 0) continue;
+          if((**it).pt() < ptCut) continue;
+
+        particles.push_back(PseudoJet((**it).px(), (**it).py(), (**it).pz(), (**it).energy()));
+        nCharged++;
+      }
+      //std::cout<<" nCharged =  "<<nCharged<<std::endl;
+      if(nCharged == 0) return false;
+      ClusterSequence csiter(particles, jet_def);
+      vector<PseudoJet> output_jets = csiter.inclusive_jets(0);
+      output_jets = sorted_by_pt(output_jets);
+      
+      
+      PseudoJet jj = output_jets[0];
+      PseudoJet j1;
+      PseudoJet j2;                                                                                                               
+      PseudoJet j1first;
+      PseudoJet j2first;
+      
+      while(jj.has_parents(j1,j2)) {
+	  
+        if(j1.perp() < j2.perp()) swap(j1,j2);
+        
+        double delta_R = j1.delta_R(j2);
+        double cut=zcut_*pow(delta_R/rParam_,beta_);
+        double z=j2.perp()/(j1.perp()+j2.perp());
+        if(z > cut && (doLateSD_ || !flagSubjet) ) {
+          flagSubjet=true;
+          j1first =j1;
+          j2first =j2;
+          *sub1 = j1first;
+          *sub2 = j2first;
+          nsdin=nsplit;
+        }
+        double dyn=z*(1-z)*j2.perp()*pow(delta_R/rParam_,dynktcut_);
+        
+        if(dyn>kt1){
+          nsel=nsplit;
+          kt1=dyn;
+        }
+        nsplit=nsplit+1;
+        jj=j1;
+      }
+      
+      if(!flagSubjet) *sub1 = output_jets[0];
+
+      if(sub1->has_constituents()) constit1 = sub1->constituents(); 
+      if(sub2->has_constituents()) constit2 = sub2->constituents(); 
+      if(nsel==nsdin)isHardest = true; 
+    } catch (fastjet::Error) { }//return -1; }
+
   return isHardest;
 }
 
@@ -908,6 +974,7 @@ void dynGroomedJets<T>::fillDescriptions(ConfigurationDescriptions& descriptions
   desc.add<bool>("writeConstits", false);
   desc.add<bool>("doLateSD", false);
   desc.add<bool>("chargedOnly", false);
+  desc.add<bool>("aggregateB", false);
   desc.add<double>("zcut", 0.1);
   desc.add<double>("beta", 0.0);
   desc.add<double>("dynktcut", 1.0);
