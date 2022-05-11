@@ -13,6 +13,7 @@
 #include "FWCore/MessageLogger/interface/MessageLogger.h"
 #include "FWCore/Utilities/interface/Exception.h"
 #include "TMath.h"
+#include "DataFormats/HepMCCandidate/interface/GenParticle.h"
 
 using namespace std;
 using namespace edm;
@@ -42,6 +43,8 @@ HiInclusiveJetAnalyzer::HiInclusiveJetAnalyzer(const edm::ParameterSet& iConfig)
   useJEC_ = iConfig.getUntrackedParameter<bool>("useJEC",true);
   doLifeTimeTagging_ = iConfig.getUntrackedParameter<bool>("doLifeTimeTagging",false);
   doLifeTimeTaggingExtra_ = iConfig.getUntrackedParameter<bool>("doLifeTimeTaggingExtra",false);
+  doTrackMatching_ = iConfig.getUntrackedParameter<bool>("doTrackMatching", false);
+  genParticleSrc_ = mayConsume<reco::GenParticleCollection>(iConfig.getParameter<InputTag>("genParticlesTag"));
   skipCorrections_  = iConfig.getUntrackedParameter<bool>("skipCorrections",false);
   pfCandidateLabel_ = consumes<PFCandidateCollection> (iConfig.getUntrackedParameter<edm::InputTag>("pfCandidateLabel",edm::InputTag("particleFlow")));  
   if (doSubJets_){ 
@@ -269,6 +272,13 @@ HiInclusiveJetAnalyzer::beginJob() {
       t->Branch("ipPhi",jets_.ipPhi,"ipPhi[nIP]/F");
       t->Branch("ipProb",jets_.ipProb,"ipProb[nIP]/F");
       t->Branch("ip3dSig",jets_.ip3dSig,"ip3dSig[nIP]/F");
+
+      if (doTrackMatching_) {
+	t->Branch("ipPtMatch", jets_.ipPtMatch, "ipPtMatch[nIP]/F");
+        t->Branch("ipEtaMatch",jets_.ipEtaMatch,"ipEtaMatch[nIP]/F");
+        t->Branch("ipPhiMatch",jets_.ipPhiMatch,"ipPhiMatch[nIP]/F");
+	t->Branch("ipMatchStatus", jets_.ipMatchStatus, "ipMatchStatus[nIP]/I");
+      }
     }
   }
 
@@ -361,6 +371,9 @@ HiInclusiveJetAnalyzer::analyze(const Event& iEvent,
 
   edm::Handle<JetFlavourInfoMatchingCollection> jetFlavourInfos;
   //edm::Handle<JetFlavourInfoMatchingCollection> subjetFlavourInfos;
+
+  edm::Handle<reco::GenParticleCollection> genParticles;
+  iEvent.getByToken(genParticleSrc_, genParticles);
   
   if(doSubJets_){ 
     iEvent.getByToken(groomedJetsToken_, groomedJets);
@@ -374,7 +387,7 @@ HiInclusiveJetAnalyzer::analyze(const Event& iEvent,
 
 
   jets_.nref = 0;
-
+  jets_.nIP = 0;
   int npatjets = (int) patjets->size();
   for(int j = 0; j < npatjets; j++){
 
@@ -472,6 +485,7 @@ HiInclusiveJetAnalyzer::analyze(const Event& iEvent,
 	  jets_.svtxTrEta.push_back(svtxTrEta);
 	  jets_.svtxTrPhi.push_back(svtxTrPhi);
 	}
+
 	
 	if((*patjets)[j].hasTagInfo(ipTagInfos_.c_str()) ){
 	  const CandIPTagInfo *ipTagInfo = (*patjets)[j].tagInfoCandIP(ipTagInfos_.c_str());
@@ -483,6 +497,13 @@ HiInclusiveJetAnalyzer::analyze(const Event& iEvent,
 	    jets_.ipProb[jets_.nIP + it] = ipTagInfo->probabilities(0)[it];
 	    reco::btag::TrackIPData data = ipTagInfo->impactParameterData()[it];
 	    jets_.ip3dSig[jets_.nIP + it] = data.ip3d.significance();
+	    if (doTrackMatching_) {
+	      int partID = trkGenPartMatch(trk, *genParticles, 1.);
+	      jets_.ipPtMatch[jets_.nIP + it] = (*genParticles)[partID].pt();
+	      jets_.ipEtaMatch[jets_.nIP + it] = (*genParticles)[partID].eta();
+	      jets_.ipPhiMatch[jets_.nIP + it] = (*genParticles)[partID].phi();
+	      jets_.ipMatchStatus[jets_.nIP + it] = (*genParticles)[partID].status();
+	    }
 	    it++;
 	  }
 	  jets_.nIP +=  it;
@@ -1062,7 +1083,45 @@ bool HiInclusiveJetAnalyzer::isFromGSP(const Candidate* c)
   
   return isFromGSP;
 }
+//---------------------------------------------------------------------
+int HiInclusiveJetAnalyzer::trkGenPartMatch(const reco::CandidatePtr track, reco::GenParticleCollection genParticles, float ptCut)
+{
+  /* 
+     Match reconstructed track to gen particle 
+  */
 
+  // Closest gen particle ID
+  int partID = -1;
+
+  double dRmin = 100.;
+  double dR = dRmin;
+  double trkEta = track->eta();
+  double trkPhi = track->phi();
+
+  for (size_t i = 0; i < genParticles.size(); i++) {
+    reco::GenParticle genParticle = genParticles[i];
+
+    double partPt = genParticle.pt();
+    if (partPt < ptCut) continue;
+
+    double partEta = genParticle.eta();
+    double partPhi = genParticle.phi();
+
+    //std::cout << "i: " << i << ", pt: " << partPt << ", eta: " << partEta << ", phi: " << partPhi << std::endl;
+
+    double dEta = trkEta - partEta;
+    double dPhi = std::acos(std::cos(trkPhi - partPhi));
+    dR = std::sqrt((dEta * dEta) + (dPhi * dPhi));
+
+    if (dR < dRmin) {
+      dRmin = dR;
+      partID = i;
+    }
+  }
+  return partID;
+}
+
+//-------------------------------------------------------------------
 bool HiInclusiveJetAnalyzer::isHardProcess(const int status)
 {
   // assumes Pythia8

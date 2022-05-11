@@ -23,6 +23,7 @@
 #include "DataFormats/PatCandidates/interface/Jet.h"
 #include "SimDataFormats/JetMatching/interface/JetFlavourInfo.h"
 #include "SimDataFormats/JetMatching/interface/JetFlavourInfoMatching.h"
+#include "DataFormats/HepMCCandidate/interface/GenParticle.h"
 
 /**\class HiInclusiveJetAnalyzer
 
@@ -44,6 +45,7 @@ private:
   int  getGroomedPartonJetIndex(const reco::GenJet jet) const;
   bool isHardProcess(const int);
   bool isFromGSP(const reco::Candidate* c);
+  int trkGenPartMatch(const reco::CandidatePtr track, reco::GenParticleCollection genParticles, float ptCut);
 
   edm::InputTag   jetTagLabel_;
   edm::EDGetTokenT<reco::JetView>                jetTag_;
@@ -80,6 +82,9 @@ private:
   double jetPtMin_;
   bool doSubJets_;
 
+  bool doTrackMatching_;
+  edm::EDGetTokenT<reco::GenParticleCollection> genParticleSrc_;
+
   TTree *t;
   edm::Service<TFileService> fs1;
 
@@ -109,6 +114,8 @@ private:
 
   static const int MAXJETS = 100;
   static const int MAXTRACKS = 1000;
+  //static const int MAXSVS = MAXJETS*3;
+  //static const int MAXTRACKSINSVS = MAXTRACKS*3;
 
   struct JRA{
 
@@ -274,6 +281,7 @@ private:
  
 
     int nsvtx[MAXJETS];
+    
     std::vector<std::vector<int> >svtxntrk;
     std::vector<std::vector<float> >svtxdl;
     std::vector<std::vector<float> >svtxdls;
@@ -287,7 +295,22 @@ private:
     std::vector<std::vector<float> >svtxTrPt;
     std::vector<std::vector<float> >svtxTrEta;
     std::vector<std::vector<float> >svtxTrPhi;
+    
+    /*
+    float svtxntrk[MAXSVS];
+    float svtxdl[MAXSVS];
+    float svtxdls[MAXSVS];
+    float svtxdl2d[MAXSVS];
+    float svtxdls2d[MAXSVS];
+    float svtxm[MAXSVS];
+    float svtxmcorr[MAXSVS];
+    float svtxpt[MAXSVS];
+    float svJetDeltaR[MAXSVS];
 
+    float svtxTrPt[MAXTRACKSINSVS];
+    float svtxTrEta[MAXTRACKSINSVS];
+    float svtxTrPhi[MAXTRACKSINSVS];
+    */
 
     float mue[MAXJETS];
     float mupt[MAXJETS];
@@ -367,6 +390,10 @@ private:
     float ipProb[MAXTRACKS];
     float ip3dSig[MAXTRACKS];
 
+    float ipPtMatch[MAXTRACKS];
+    float ipEtaMatch[MAXTRACKS];
+    float ipPhiMatch[MAXTRACKS];
+    int ipMatchStatus[MAXTRACKS];
 
   };
 
