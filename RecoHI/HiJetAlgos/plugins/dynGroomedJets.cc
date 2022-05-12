@@ -59,15 +59,15 @@ public:
   static void fillDescriptions(ConfigurationDescriptions&);
 
 private:
-  void produce(StreamID, Event&, const EventSetup&, bool aggregateB_) const override;
+  void produce(StreamID, Event&, const EventSetup&) const override;
 
   bool IterativeDeclustering(vector<PseudoJet> jetConstituents, PseudoJet *sub1, PseudoJet *sub2, vector<PseudoJet> &constit1, vector<PseudoJet> &constit2) const;
   BasicJet ConvertFJ2BasicJet(PseudoJet *fj, vector<PseudoJet>, Handle<PFCandidateCollection>, const EventSetup& iSetup) const;
 
   bool trkInVector(reco::CandidatePtr trk, std::vector<reco::CandidatePtr> tracks) const;
   int trkGenPartMatch(reco::Jet::Constituent constituent, reco::GenParticleCollection genParticles, double ptCut) const;
-  vector<PseudoJet> aggregateB(const T& jet, float ptCut, reco::GenParticleCollection genParticles);
-  vector<PseudoJet> aggregateB(const T& jet, float ptCut, std::vector<reco::CandidatePtr>& ipTracks, std::vector<reco::CandidatePtr>& svTracks);
+  vector<PseudoJet> aggregateB(const T& jet, float ptCut, reco::GenParticleCollection genParticles) const;
+  vector<PseudoJet> aggregateB(const T& jet, float ptCut, std::vector<reco::CandidatePtr>& ipTracks, std::vector<reco::CandidatePtr>& svTracks) const;
 
   // ------------- member data ----------------------------
   EDGetTokenT<View<T> > jetSrc_;
@@ -106,7 +106,7 @@ dynGroomedJets<T>::dynGroomedJets(const ParameterSet& iConfig)
 }
 
 template <class T>
-void dynGroomedJets<T>::produce(StreamID, Event& iEvent, const EventSetup& iSetup, bool aggregateB_) const {
+void dynGroomedJets<T>::produce(StreamID, Event& iEvent, const EventSetup& iSetup) const {
   auto jetCollection = make_unique<reco::BasicJetCollection>();
   auto subjetCollection = make_unique<reco::BasicJetCollection>();
 
@@ -182,11 +182,17 @@ void dynGroomedJets<T>::produce(StreamID, Event& iEvent, const EventSetup& iSetu
         jetConstituents = aggregateB(pfjet, ptCut, *genParticles);
       }
     } else {
-      jetConstituents = pfjet.getJetConstituents();
+      for (reco::CandidatePtr constituent : pfjet.getJetConstituents()) {
+		// charge and pt cut
+		if ((chargedOnly_) && (constituent->charge() == 0)) continue;
+		if (constituent->pt() < ptCut) continue;
+
+		jetConstituents.push_back(PseudoJet(constituent->px(), constituent->py(), constituent->pz(), constituent->energy()));
+	  }
     }
 
     // Iterative declustering
-    isHardest.push_back(IterativeDeclustering(jetConstituents, ptCut, subFJ1, subFJ2, constit1, constit2));
+    isHardest.push_back(IterativeDeclustering(jetConstituents, subFJ1, subFJ2, constit1, constit2));
 
     // Convert fastjets to basicjets    
     BasicJet subjet1 = ConvertFJ2BasicJet(subFJ1, constit1, pfcands, iSetup);
@@ -753,7 +759,7 @@ bool dynGroomedJets<T>::trkInVector(reco::CandidatePtr trk, std::vector<reco::Ca
 // Function to aggregate reconstructed tracks into pseudo-B's 
 template <class T>
 std::vector<fastjet::PseudoJet> dynGroomedJets<T>::aggregateB(const T& jet, float ptCut,
-                                                              std::vector<reco::CandidatePtr>& ipTracks, std::vector<reco::CandidatePtr>& svTracks)
+                                                              std::vector<reco::CandidatePtr>& ipTracks, std::vector<reco::CandidatePtr>& svTracks) const
 {
   // Input particle collection 
   std::vector<reco::CandidatePtr> inputJetConstituents = jet.getJetConstituents();
@@ -802,7 +808,7 @@ std::vector<fastjet::PseudoJet> dynGroomedJets<T>::aggregateB(const T& jet, floa
 // Function to aggregate gen particles coming from B decays into pseudo-B's 
 template <class T>
 std::vector<fastjet::PseudoJet> dynGroomedJets<T>::aggregateB(const T& jet, float ptCut,
-                                                              reco::GenParticleCollection genParticles)
+                                                              reco::GenParticleCollection genParticles) const
 {
   // Input and output particle collections
     std::vector<reco::CandidatePtr> inputConstituents = jet.getJetConstituents();
@@ -821,7 +827,6 @@ std::vector<fastjet::PseudoJet> dynGroomedJets<T>::aggregateB(const T& jet, floa
       if (genStatus >= 100) {
 	      bConstituentsMap[genStatus].push_back(constituent);
       } else if (genStatus == 1) {
-        nCharged++;
         outputConstituents.push_back(PseudoJet(constituent->px(), constituent->py(), constituent->pz(), constituent->energy()));
       }
     }
