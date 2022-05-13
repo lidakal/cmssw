@@ -183,12 +183,12 @@ void dynGroomedJets<T>::produce(StreamID, Event& iEvent, const EventSetup& iSetu
       }
     } else {
       for (reco::CandidatePtr constituent : pfjet.getJetConstituents()) {
-		// charge and pt cut
-		if ((chargedOnly_) && (constituent->charge() == 0)) continue;
-		if (constituent->pt() < ptCut) continue;
+		    // charge and pt cut
+        if ((chargedOnly_) && (constituent->charge() == 0)) continue;
+        if (constituent->pt() < ptCut) continue;
 
-		jetConstituents.push_back(PseudoJet(constituent->px(), constituent->py(), constituent->pz(), constituent->energy()));
-	  }
+        jetConstituents.push_back(PseudoJet(constituent->px(), constituent->py(), constituent->pz(), constituent->energy()));
+      }
     }
 
     // Iterative declustering
