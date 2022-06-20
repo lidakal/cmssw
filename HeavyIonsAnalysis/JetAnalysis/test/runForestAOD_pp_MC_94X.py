@@ -26,11 +26,14 @@ process.HiForest.HiForestVersion = cms.string(version)
 
 process.source = cms.Source("PoolSource",
     fileNames = cms.untracked.vstring(
-	'/store/himc/RunIIpp5Spring18DR/QCD_pThat-15_bJet_TuneCP5_5p02TeV_pythia8/AODSIM/94X_mc2017_realistic_forppRef5TeV_v1-v1/230000/00D396CF-878A-E911-88E8-14187741278B.root'
+        '/store/himc/RunIIpp5Spring18DR/QCD_pThat-15_bJet_TuneCP5_5p02TeV_pythia8/AODSIM/94X_mc2017_realistic_forppRef5TeV_v1-v1/230000/00D396CF-878A-E911-88E8-14187741278B.root'
         #'file:/data_CMS/cms/mnguyen/00D396CF-878A-E911-88E8-14187741278B.root'
     ),
                             #skipEvents = cms.untracked.uint32(1242)
 )
+# REMOVE AFTERWARDS
+#process.source.lumisToProcess = cms.untracked.VLuminosityBlockRange('1:12258')
+#process.source.eventsToProcess = cms.untracked.VEventRange('1:148501103')
 
 # Number of events we want to process, -1 = all events
 process.maxEvents = cms.untracked.PSet(input = cms.untracked.int32(1))
@@ -209,7 +212,7 @@ process.ana_step = cms.Path(
 )
 
 #####################################################################################
-
+'''
 # edm output for debugging purposes
 process.output = cms.OutputModule(
     "PoolOutputModule",
@@ -223,7 +226,7 @@ process.output = cms.OutputModule(
     )
 
 process.output_path = cms.EndPath(process.output)
-
+'''
 
 #########################
 # Event Selection
@@ -266,6 +269,7 @@ process.pAna = cms.EndPath(process.skimanalysis)
 # Customization
 # write heavy stuff for debugging b-tagging
 process.ak4PFJetAnalyzer.doLifeTimeTaggingExtra = True
+process.ak4PFJetAnalyzer.doTrackMatching = True
 
 #option to do late soft drop
 process.dynGroomedGenJets.doLateSD = False
@@ -279,11 +283,17 @@ process.genPartonsForJets.chargedOnly = cms.bool(False);
 ## change these to run charged only or full jet declustering
 process.dynGroomedGenJets.chargedOnly = True
 process.dynGroomedPFJets.chargedOnly = True
+process.dynGroomedGenJets.aggregateHF = True
+process.dynGroomedPFJets.aggregateHF = True
 
-#replace b-hadron decays by the parent
+
+## replace b-hadron decays by the parent
 process.load("RecoHI.HiJetAlgos.CheatHFHadronReplacer_cfi")
+# option to tag B or C daughter in CheatHFHadronReplacer
+process.CheatHFHadronReplacer.tagBorC = False
+
 process.genJetSequence.insert(0,process.CheatHFHadronReplacer)
-process.genParticlesForJets.src = 'CheatHFHadronReplacer'
+#process.genParticlesForJets.src = 'CheatHFHadronReplacer'
 
 #process.load("RecoHI.HiJetAlgos.RecoHFHadronReplacer_cfi")
 #process.jetSequence+=process.RecoHFHadronReplacer

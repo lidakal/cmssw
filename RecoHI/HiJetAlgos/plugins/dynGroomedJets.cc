@@ -64,10 +64,10 @@ private:
   bool IterativeDeclustering(vector<PseudoJet> jetConstituents, PseudoJet *sub1, PseudoJet *sub2, vector<PseudoJet> &constit1, vector<PseudoJet> &constit2) const;
   BasicJet ConvertFJ2BasicJet(PseudoJet *fj, vector<PseudoJet>, Handle<PFCandidateCollection>, const EventSetup& iSetup) const;
 
-  bool trkInVector(reco::CandidatePtr trk, std::vector<reco::CandidatePtr> tracks) const;
+  int trkInVector(reco::CandidatePtr trk, std::vector<reco::CandidatePtr> tracks) const;
   int trkGenPartMatch(reco::Jet::Constituent constituent, reco::GenParticleCollection genParticles, double ptCut) const;
-  vector<PseudoJet> aggregateB(const T& jet, float ptCut, reco::GenParticleCollection genParticles) const;
-  vector<PseudoJet> aggregateB(const T& jet, float ptCut, std::vector<reco::CandidatePtr>& ipTracks, std::vector<reco::CandidatePtr>& svTracks) const;
+  vector<PseudoJet> aggregateHF(const T& jet, float ptCut, reco::GenParticleCollection genParticles) const;
+  vector<PseudoJet> aggregateHF(const T& jet, float ptCut, const reco::CandIPTagInfo ipTagInfo, const reco::CandSecondaryVertexTagInfo& svTagInfo, const reco::GenParticleCollection genParticles) const;
 
   // ------------- member data ----------------------------
   EDGetTokenT<View<T> > jetSrc_;
@@ -78,7 +78,7 @@ private:
   bool writeConstits_;
   bool doLateSD_;
   bool chargedOnly_;
-  bool aggregateB_;
+  bool aggregateHF_;
   double zcut_;
   double beta_;
   double dynktcut_;
@@ -95,7 +95,7 @@ dynGroomedJets<T>::dynGroomedJets(const ParameterSet& iConfig)
     writeConstits_(iConfig.getParameter<bool>("writeConstits")),
     doLateSD_(iConfig.getParameter<bool>("doLateSD")),
     chargedOnly_(iConfig.getParameter<bool>("chargedOnly")),
-    aggregateB_(iConfig.getParameter<bool>("aggregateB")),
+    aggregateHF_(iConfig.getParameter<bool>("aggregateHF")), // whatever is tagged in CheatHFHadronReplacer will be aggregated
     zcut_(iConfig.getParameter<double>("zcut")),
     beta_(iConfig.getParameter<double>("beta")),
     dynktcut_(iConfig.getParameter<double>("dynktcut")),
@@ -107,6 +107,8 @@ dynGroomedJets<T>::dynGroomedJets(const ParameterSet& iConfig)
 
 template <class T>
 void dynGroomedJets<T>::produce(StreamID, Event& iEvent, const EventSetup& iSetup) const {
+  //std::cout << "In dynGroomedJets" << std::endl;
+
   auto jetCollection = make_unique<reco::BasicJetCollection>();
   auto subjetCollection = make_unique<reco::BasicJetCollection>();
 
@@ -135,6 +137,7 @@ void dynGroomedJets<T>::produce(StreamID, Event& iEvent, const EventSetup& iSetu
   // Grab gen particles
   edm::Handle<reco::GenParticleCollection> genParticles;
   iEvent.getByToken(genParticleSrc_, genParticles);
+  //std::cout << "nb of gen particles in collection: " << (*genParticles).size() << std::endl; 
 
 
   indices.resize(pfjets->size());
@@ -166,33 +169,53 @@ void dynGroomedJets<T>::produce(StreamID, Event& iEvent, const EventSetup& iSetu
     PseudoJet *subFJ2 = new PseudoJet();
     vector<PseudoJet> constit1;
     vector<PseudoJet> constit2;
+	
+	//std::cout << "\nNew jet with pt: " << pfjet.pt() << std::endl;
 
+	//for (auto constituent : pfjet.getJetConstituents()) {
+	//  std::cout << "constituent pt: " << constituent->pt() << ", constituent mass: " << constituent->mass() << std::endl;
+	//}
+	//std::cout << "\n" << std::endl;
     // aggregate B based on jet type
-    if (aggregateB_) {
-      if (typeid(T) == typeid(reco::PFJet)) { 
+    if (aggregateHF_) {
+      if (typeid(T) == typeid(reco::PFJet)) {
+		    //std::cout << "Aggregating HF for PFJet" << std::endl;
         // Grab IP and SV tag info for jet
         const std::vector<reco::CandSecondaryVertexTagInfo>& svTagInfos = *svTagInfoHandle;
         const reco::CandSecondaryVertexTagInfo& svTagInfo = svTagInfos[jetIndex];
         const reco::CandIPTagInfo ipTagInfo = *(svTagInfo.trackIPTagInfoRef().get());
-        std::vector<reco::CandidatePtr> ipTracks = ipTagInfo.selectedTracks();
-        std::vector<reco::CandidatePtr> svTracks = svTagInfo.vertexTracks();
+        //std::vector<reco::CandidatePtr> ipTracks = ipTagInfo.selectedTracks();
+        //std::vector<reco::CandidatePtr> svTracks = svTagInfo.vertexTracks();
 
-        jetConstituents = aggregateB(pfjet, ptCut, ipTracks, svTracks);
+        jetConstituents = aggregateHF(pfjet, ptCut, ipTagInfo, svTagInfo, *genParticles);
       } else if (typeid(T) == typeid(reco::GenJet)) {
-        jetConstituents = aggregateB(pfjet, ptCut, *genParticles);
+		    //std::cout << "Aggregating HF for GenJet" << std::endl;
+        jetConstituents = aggregateHF(pfjet, ptCut, *genParticles);
       }
     } else {
       for (reco::CandidatePtr constituent : pfjet.getJetConstituents()) {
-		    // charge and pt cut
+        //std::cout << "Not aggregating" << std::endl;
+        //std::cout << "const charge: " << constituent->charge() << std::endl;
+        //std::cout << "const pt: " << constituent->pt() << std::endl;
+        // charge and pt cut
         if ((chargedOnly_) && (constituent->charge() == 0)) continue;
         if (constituent->pt() < ptCut) continue;
-
+		    //std::cout << "const kept" << std::endl;
         jetConstituents.push_back(PseudoJet(constituent->px(), constituent->py(), constituent->pz(), constituent->energy()));
       }
     }
+	//std::cout << "nb of jet constituents: " << jetConstituents.size() << std::endl;
+	//for (auto constituent : jetConstituents) {
+	//std::cout << "eta: " << constituent.eta() << std::endl;
+	//std::cout << "phi: " << constituent.phi() << std::endl;
+	//}
+
 
     // Iterative declustering
     isHardest.push_back(IterativeDeclustering(jetConstituents, subFJ1, subFJ2, constit1, constit2));
+
+	//std::cout << "sjt1 pt: " << subFJ1->pt() << std::endl;
+	//std::cout << "sjt2 pt: " << subFJ2->pt() << std::endl;
 
     // Convert fastjets to basicjets    
     BasicJet subjet1 = ConvertFJ2BasicJet(subFJ1, constit1, pfcands, iSetup);
@@ -304,7 +327,7 @@ bool dynGroomedJets<T>::IterativeDeclusteringReco(const T& jet, std::vector<reco
       int nCharged = 0;
 
       // Particle collection to aggregate into a pseudo-B 
-      std::vector<reco::CandidatePtr> bProducts;
+      std::vector<reco::CandidatePtr> hfProducts;
       
       
       //cout << "nb of tracks in jet: " << ipTracks.size() << std::endl;
@@ -334,7 +357,7 @@ bool dynGroomedJets<T>::IterativeDeclusteringReco(const T& jet, std::vector<reco
         // Look for track in svTracks
         bool foundTrackInSV = trkInVector(daughter, svTracks);
         if (foundTrackInSV) { 
-          bProducts.push_back(daughter);
+          hfProducts.push_back(daughter);
         } else {
           particles.push_back(PseudoJet(daughter->px(), daughter->py(), daughter->pz(), daughter->energy()));
         }
@@ -342,21 +365,21 @@ bool dynGroomedJets<T>::IterativeDeclusteringReco(const T& jet, std::vector<reco
       }
 
       //cout << "all non B decay products added to particles" << endl;
-      //cout << "tracks associated to any sv : " << bProducts.size() << endl;
+      //cout << "tracks associated to any sv : " << hfProducts.size() << endl;
 
-      // Aggregate all bProducts into a single pseudo-B
-      if (bProducts.size() > 0) {
+      // Aggregate all hfProducts into a single pseudo-B
+      if (hfProducts.size() > 0) {
         double px = 0;
         double py = 0;
         double pz = 0;
         double energy = 0;
-        for (reco::CandidatePtr bProduct : bProducts) {
+        for (reco::CandidatePtr bProduct : hfProducts) {
           px += bProduct->px();
           py += bProduct->py();
           pz += bProduct->pz();
           energy += bProduct->energy();
         }
-        //cout << "Added B to particles with " << bProducts.size() << " constituents" << endl;
+        //cout << "Added B to particles with " << hfProducts.size() << " constituents" << endl;
         particles.push_back(PseudoJet(px, py, pz, energy));
         nCharged++;
       }
@@ -518,7 +541,7 @@ bool dynGroomedJets<T>::IterativeDeclusteringGen(const T& jet, reco::GenParticle
     // Input and output particle collections
     std::vector<reco::CandidatePtr> inputConstituents = jet.getJetConstituents();
     std::vector<fastjet::PseudoJet> outputConstituents;
-    std::map<int, std::vector<reco::CandidatePtr>> bConstituentsMap;
+    std::map<int, std::vector<reco::CandidatePtr>> hfConstituentsMap;
 
     // Keep track of charged particles
     int nCharged = 0;
@@ -534,7 +557,7 @@ bool dynGroomedJets<T>::IterativeDeclusteringGen(const T& jet, reco::GenParticle
     
       // Collect particles coming from B decays, add the rest directly to the collection
       if (genStatus >= 100) {
-	      bConstituentsMap[genStatus].push_back(constituent);
+	      hfConstituentsMap[genStatus].push_back(constituent);
       } else if (genStatus == 1) {
         nCharged++;
         outputConstituents.push_back(PseudoJet(constituent->px(), constituent->py(), constituent->pz(), constituent->energy()));
@@ -543,16 +566,16 @@ bool dynGroomedJets<T>::IterativeDeclusteringGen(const T& jet, reco::GenParticle
 
     // Aggregate particles coming from B decays into pseudo-B's 
     // and add them to the collection
-    for (auto it = bConstituentsMap.begin(); it != bConstituentsMap.end(); ++it) {
+    for (auto it = hfConstituentsMap.begin(); it != hfConstituentsMap.end(); ++it) {
       double px = 0;
       double py = 0;
       double pz = 0;
       double energy = 0;
-      for (reco::CandidatePtr bConstituent : it->second) {
-        px += bConstituent->px();
-        py += bConstituent->py();
-        pz += bConstituent->pz();
-        energy += bConstituent->energy();
+      for (reco::CandidatePtr hfConstituent : it->second) {
+        px += hfConstituent->px();
+        py += hfConstituent->py();
+        pz += hfConstituent->pz();
+        energy += hfConstituent->energy();
       }
       //cout << "Added B to particles with " << (it->second).size() << "constituents" << endl;
       nCharged++;
@@ -686,7 +709,7 @@ void dynGroomedJets<T>::fillDescriptions(ConfigurationDescriptions& descriptions
   desc.add<bool>("writeConstits", false);
   desc.add<bool>("doLateSD", false);
   desc.add<bool>("chargedOnly", false);
-  desc.add<bool>("aggregateB", false);
+  desc.add<bool>("aggregateHF", false);
   desc.add<double>("zcut", 0.1);
   desc.add<double>("beta", 0.0);
   desc.add<double>("dynktcut", 1.0);
@@ -727,7 +750,8 @@ int dynGroomedJets<T>::trkGenPartMatch(reco::Jet::Constituent constituent, reco:
     double partPt = genParticle.pt();
     //cout << "genParticle status: " << genParticle.status() << endl;
     if (partPt < ptCut) continue;
-
+	  if(chargedOnly_ && genParticle.charge() == 0) continue;
+	
     double partEta = genParticle.eta();
     double partPhi = genParticle.phi();
 
@@ -746,20 +770,22 @@ int dynGroomedJets<T>::trkGenPartMatch(reco::Jet::Constituent constituent, reco:
 }
 
 template <class T>
-bool dynGroomedJets<T>::trkInVector(reco::CandidatePtr trk, std::vector<reco::CandidatePtr> tracks) const {
-  bool isInVector = false;
-  int counts = std::count(tracks.begin(), tracks.end(), trk);
-  if (counts > 0) { 
-    isInVector = true;
+int dynGroomedJets<T>::trkInVector(reco::CandidatePtr trk, std::vector<reco::CandidatePtr> tracks) const {
+  int indexInVector = -1;
+  auto it = find(tracks.begin(), tracks.end(), trk);
+  if (it != tracks.end()) {
+	indexInVector = it - tracks.begin();
   }
-  return isInVector;
+  return indexInVector;
 }
 
 
 // Function to aggregate reconstructed tracks into pseudo-B's 
 template <class T>
-std::vector<fastjet::PseudoJet> dynGroomedJets<T>::aggregateB(const T& jet, float ptCut,
-                                                              std::vector<reco::CandidatePtr>& ipTracks, std::vector<reco::CandidatePtr>& svTracks) const
+std::vector<fastjet::PseudoJet> dynGroomedJets<T>::aggregateHF(const T& jet, float ptCut,
+                                                              const reco::CandIPTagInfo ipTagInfo, 
+                                                              const reco::CandSecondaryVertexTagInfo& svTagInfo,
+                                                              const reco::GenParticleCollection genParticles) const
 {
   // Input particle collection 
   std::vector<reco::CandidatePtr> inputJetConstituents = jet.getJetConstituents();
@@ -768,7 +794,12 @@ std::vector<fastjet::PseudoJet> dynGroomedJets<T>::aggregateB(const T& jet, floa
   std::vector<fastjet::PseudoJet> outputJetConstituents;
 
   // Particle collection to aggregate into a pseudo-B 
-  std::vector<reco::CandidatePtr> bProducts;
+  //std::vector<reco::CandidatePtr> hfProducts;
+  std::map<int, std::vector<reco::CandidatePtr>> hfConstituentsMap;
+
+  // Get ipTracks and svTracks for jet
+  std::vector<reco::CandidatePtr> ipTracks = ipTagInfo.selectedTracks();
+  std::vector<reco::CandidatePtr> svTracks = svTagInfo.vertexTracks();
 
   for(reco::CandidatePtr constituent : inputJetConstituents) {
     // Charge and pt cut
@@ -776,44 +807,91 @@ std::vector<fastjet::PseudoJet> dynGroomedJets<T>::aggregateB(const T& jet, floa
     if(constituent->pt() < ptCut) continue;
 
     // Look for track in ipTracks, otherwise discard
-    bool foundTrack = trkInVector(constituent, ipTracks);
-    if(!foundTrack) continue;
+    int whichTrack = trkInVector(constituent, ipTracks);
+    if (whichTrack < 0) continue;
 
     // Look for track in svTracks
-    bool foundTrackInSV = trkInVector(constituent, svTracks);
-    if (foundTrackInSV) { 
-      bProducts.push_back(constituent);
-    } else {
-      outputJetConstituents.push_back(PseudoJet(constituent->px(), constituent->py(), constituent->pz(), constituent->energy()));
-    }
-  }
+    //int whichTrackInSV = trkInVector(constituent, svTracks);
+    //bool inSV = (whichTrackInSV >= 0);
 
-  // Aggregate all bProducts into a single pseudo-B
-  if (bProducts.size() > 0) {
-    double px = 0;
-    double py = 0;
-    double pz = 0;
-    double energy = 0;
-    for (reco::CandidatePtr bProduct : bProducts) {
-      px += bProduct->px();
-      py += bProduct->py();
-      pz += bProduct->pz();
-      energy += bProduct->energy();
+    // get ip3dSig
+    //reco::btag::TrackIPData IPdata = ipTagInfo.impactParameterData()[whichTrack];
+    //Float_t ip3dSig = IPdata.ip3d.significance();
+    //std::cout << "constituent pt: " << constituent->pt() << ", ip data pt: " << ipTracks[whichTrack]->pt() << std::endl;
+    //std::cout << "new constituent:" << std::endl;
+    //std::cout << "ip3dSig = " << ip3dSig << std::endl;
+    //std::cout << "is in SV = " << inSV << std::endl;
+
+    //bool isHFproduct = (inSV && (std::abs(ip3dSig) > 3.)) || (std::abs(ip3dSig) > 9.);
+
+	  // use truth info 
+    int genStatus = trkGenPartMatch(constituent, genParticles, ptCut);
+    
+    // Collect particles coming from HF decays, add the rest directly to the collection
+    if (genStatus >= 100) {
+      hfConstituentsMap[genStatus].push_back(constituent);
+	  	//std::cout << "Found HF constituent" << std::endl;
+    } else if (genStatus == 1) {
+      outputJetConstituents.push_back(PseudoJet(constituent->px(), constituent->py(), constituent->pz(), constituent->energy()));
+		  //std::cout << "Not a B constituent, added to collection" << std::endl;
     }
-    outputJetConstituents.push_back(PseudoJet(px, py, pz, energy));
-  }
+  } // end loop over input jet constituents
+
+  // Aggregate particles coming from HF decays into pseudo-B/C's 
+  // and add them to the collection
+  for (auto it = hfConstituentsMap.begin(); it != hfConstituentsMap.end(); ++it) {
+	  reco::Candidate::PolarLorentzVector pseudoHF(0., 0., 0., 0.);
+    for (reco::CandidatePtr hfConstituent : it->second) {
+      reco::Candidate::PolarLorentzVector productLorentzVector(0., 0., 0., 0.);
+      productLorentzVector.SetPt(hfConstituent->pt());
+      productLorentzVector.SetEta(hfConstituent->eta());
+      productLorentzVector.SetPhi(hfConstituent->phi());
+      productLorentzVector.SetM(hfConstituent->mass());
+      pseudoHF += productLorentzVector;
+	  }
+    outputJetConstituents.push_back(PseudoJet(pseudoHF.Px(), pseudoHF.Py(), pseudoHF.Pz(), pseudoHF.E()));
+  } // end map loop
+
+	//std::cout << "daughter pt: " << constituent->pt() << std::endl;
+	//std::cout << "daughter inSV: " << foundTrackInSV << std::endl;
+	//std::cout << "daughter ip3dSig: " << ip3dSig << std::endl;
+
+  //if (isHFproduct) { 
+    //std::cout << "is b product" << std::endl;
+  //  hfProducts.push_back(constituent);
+	//} else {
+	    //std::cout << "is not b product, added to outputJetConstituents" << std::endl;
+  //    outputJetConstituents.push_back(PseudoJet(constituent->px(), constituent->py(), constituent->pz(), constituent->energy()));
+	//}
+  
+
+  // Aggregate all hfProducts into a single pseudo-B
+  //if (hfProducts.size() > 0) {
+  //  reco::Candidate::PolarLorentzVector pseudoHF(0., 0., 0., 0.);
+  //    for (reco::CandidatePtr product : hfProducts) {
+  //      reco::Candidate::PolarLorentzVector productLorentzVector(0., 0., 0., 0.);
+  //      productLorentzVector.SetPt(product->pt());
+  //      productLorentzVector.SetEta(product->eta());
+  //      productLorentzVector.SetPhi(product->phi());
+  //      productLorentzVector.SetM(product->mass());
+  //      pseudoHF += productLorentzVector;
+  //      //std::cout << "b product lorentz vector: " << productLorentzVector << std::endl;
+  //  }
+	  //std::cout << "pseudo-B added to consituents" << std::endl;
+  //  outputJetConstituents.push_back(PseudoJet(pseudoHF.Px(), pseudoHF.Py(), pseudoHF.Pz(), pseudoHF.E()));
+  //}
   return outputJetConstituents;
-}
+} // end aggregateHF()
 
 // Function to aggregate gen particles coming from B decays into pseudo-B's 
 template <class T>
-std::vector<fastjet::PseudoJet> dynGroomedJets<T>::aggregateB(const T& jet, float ptCut,
+std::vector<fastjet::PseudoJet> dynGroomedJets<T>::aggregateHF(const T& jet, float ptCut,
                                                               reco::GenParticleCollection genParticles) const
 {
-  // Input and output particle collections
+    // Input and output particle collections
     std::vector<reco::CandidatePtr> inputConstituents = jet.getJetConstituents();
     std::vector<fastjet::PseudoJet> outputConstituents;
-    std::map<int, std::vector<reco::CandidatePtr>> bConstituentsMap;
+    std::map<int, std::vector<reco::CandidatePtr>> hfConstituentsMap;
 
     for (reco::CandidatePtr constituent : inputConstituents) {
       // Charge and pt cut
@@ -823,28 +901,31 @@ std::vector<fastjet::PseudoJet> dynGroomedJets<T>::aggregateB(const T& jet, floa
       // Match with gen particle -- should be exact match
       int genStatus = trkGenPartMatch(constituent, genParticles, ptCut);
     
-      // Collect particles coming from B decays, add the rest directly to the collection
+      // Collect particles coming from HF decays, add the rest directly to the collection
       if (genStatus >= 100) {
-	      bConstituentsMap[genStatus].push_back(constituent);
+	      hfConstituentsMap[genStatus].push_back(constituent);
+		    //std::cout << "Found HF constituent" << std::endl;
       } else if (genStatus == 1) {
         outputConstituents.push_back(PseudoJet(constituent->px(), constituent->py(), constituent->pz(), constituent->energy()));
+		    //std::cout << "Not a HF constituent, added to collection" << std::endl;
       }
     }
 
-    // Aggregate particles coming from B decays into pseudo-B's 
+    // Aggregate particles coming from HF decays into pseudo-B/D's 
     // and add them to the collection
-    for (auto it = bConstituentsMap.begin(); it != bConstituentsMap.end(); ++it) {
-      double px = 0;
-      double py = 0;
-      double pz = 0;
-      double energy = 0;
-      for (reco::CandidatePtr bConstituent : it->second) {
-        px += bConstituent->px();
-        py += bConstituent->py();
-        pz += bConstituent->pz();
-        energy += bConstituent->energy();
+    for (auto it = hfConstituentsMap.begin(); it != hfConstituentsMap.end(); ++it) {
+      reco::Candidate::PolarLorentzVector pseudoHF(0., 0., 0., 0.);
+        for (reco::CandidatePtr hfConstituent : it->second) {
+        reco::Candidate::PolarLorentzVector productLorentzVector(0., 0., 0., 0.);
+        productLorentzVector.SetPt(hfConstituent->pt());
+        productLorentzVector.SetEta(hfConstituent->eta());
+        productLorentzVector.SetPhi(hfConstituent->phi());
+        productLorentzVector.SetM(hfConstituent->mass());
+        pseudoHF += productLorentzVector;
+        //std::cout << "hf product lorentz vector: " << productLorentzVector << std::endl;
       }
-      outputConstituents.push_back(PseudoJet(px, py, pz, energy));
+      //std::cout << "added HF to collection" << std::endl;
+      outputConstituents.push_back(PseudoJet(pseudoHF.Px(), pseudoHF.Py(), pseudoHF.Pz(), pseudoHF.E()));
     }
   return outputConstituents;
 }
