@@ -33,10 +33,10 @@ process.source = cms.Source("PoolSource",
 )
 # REMOVE AFTERWARDS
 #process.source.lumisToProcess = cms.untracked.VLuminosityBlockRange('1:12258')
-#process.source.eventsToProcess = cms.untracked.VEventRange('1:148501103')
+#process.source.eventsToProcess = cms.untracked.VEventRange('1:148503055')
 
 # Number of events we want to process, -1 = all events
-process.maxEvents = cms.untracked.PSet(input = cms.untracked.int32(1))
+process.maxEvents = cms.untracked.PSet(input = cms.untracked.int32(-1))
 
 #####################################################################################
 # Load Global Tag, Geometry, etc.
@@ -283,14 +283,14 @@ process.genPartonsForJets.chargedOnly = cms.bool(False);
 ## change these to run charged only or full jet declustering
 process.dynGroomedGenJets.chargedOnly = True
 process.dynGroomedPFJets.chargedOnly = True
-process.dynGroomedGenJets.aggregateHF = True
-process.dynGroomedPFJets.aggregateHF = True
+process.dynGroomedGenJets.aggregateHF = False
+process.dynGroomedPFJets.aggregateHF = False
 
 
 ## replace b-hadron decays by the parent
 process.load("RecoHI.HiJetAlgos.CheatHFHadronReplacer_cfi")
-# option to tag B or C daughter in CheatHFHadronReplacer
-process.CheatHFHadronReplacer.tagBorC = False
+# option to tag B or C daughter in CheatHFHadronReplacer: True for B, False for C
+process.CheatHFHadronReplacer.tagBorC = True
 
 process.genJetSequence.insert(0,process.CheatHFHadronReplacer)
 #process.genParticlesForJets.src = 'CheatHFHadronReplacer'
