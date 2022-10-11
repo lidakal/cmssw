@@ -4,7 +4,7 @@ config = Configuration()
 
 ### General ###
 config.section_('General')
-config.General.requestName = 'bJet2017G_bjet_SD_chargedSJ_mergedB'
+config.General.requestName = 'bJet2017G_qcdMC_trackTaggingTraining'
 config.General.workArea = 'crab_projects'
 config.General.transferOutputs = True
 config.General.transferLogs = True
@@ -19,18 +19,23 @@ config.JobType.allowUndistributedCMSSW = True
 
 #### Data ####
 config.section_("Data")
-#config.Data.inputDataset = "/QCD_pThat-15_Dijet_TuneCP5_5p02TeV_pythia8/RunIIpp5Spring18DR-94X_mc2017_realistic_forppRef5TeV_v1-v1/AODSIM"
-config.Data.inputDataset = "/QCD_pThat-15_bJet_TuneCP5_5p02TeV_pythia8/RunIIpp5Spring18DR-94X_mc2017_realistic_forppRef5TeV_v1-v1/AODSIM"
+
+# qcdMC dataset
+config.Data.inputDataset = "/QCD_pThat-15_Dijet_TuneCP5_5p02TeV_pythia8/RunIIpp5Spring18DR-94X_mc2017_realistic_forppRef5TeV_v1-v1/AODSIM"
+
+# bJetMC dataset
+#config.Data.inputDataset = "/QCD_pThat-15_bJet_TuneCP5_5p02TeV_pythia8/RunIIpp5Spring18DR-94X_mc2017_realistic_forppRef5TeV_v1-v1/AODSIM"
+
 #config.Data.inputDataset ='/QCD_pThat-15_Mujet_TuneCP5_5p02TeV_pythia8/RunIIpp5Spring18DR-94X_mc2017_realistic_forppRef5TeV_v1-v3/AODSIM'
 #config.Data.inputDBS = "global"
 #config.Data.inputDBS = "phys03"
 config.Data.splitting = "FileBased"
 #config.Data.splitting = "LumiBased"
 #config.Data.splitting = "Automatic"
-config.Data.unitsPerJob =1
+config.Data.unitsPerJob = 1
 config.Data.totalUnits = -1
 config.Data.publication = False
-config.Data.outLFNDirBase = '/store/user/mnguyen/bJet2022'
+config.Data.outLFNDirBase = '/store/user/lkalipol/bJet2022'
 config.Data.outputDatasetTag = config.General.requestName
 config.Data.ignoreLocality = True
 config.Data.allowNonValidInputDataset = True

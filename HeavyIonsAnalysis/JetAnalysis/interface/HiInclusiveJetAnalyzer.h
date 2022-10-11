@@ -46,6 +46,8 @@ private:
   bool isHardProcess(const int);
   bool isFromGSP(const reco::Candidate* c);
   int trkGenPartMatch(const reco::CandidatePtr track, reco::GenParticleCollection genParticles, float ptCut);
+  int trkInVector(reco::CandidatePtr trk, std::vector<reco::CandidatePtr> tracks) const;
+
 
   edm::InputTag   jetTagLabel_;
   edm::EDGetTokenT<reco::JetView>                jetTag_;
@@ -394,6 +396,12 @@ private:
     float ipEtaMatch[MAXTRACKS];
     float ipPhiMatch[MAXTRACKS];
     int ipMatchStatus[MAXTRACKS];
+
+    int ipInSV[MAXTRACKS];
+    float ipSvtxdls[MAXTRACKS];
+    float ipSvtxdls2d[MAXTRACKS];
+    float ipSvtxm[MAXTRACKS];
+    float ipSvtxmcorr[MAXTRACKS];
 
   };
 

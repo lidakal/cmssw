@@ -326,6 +326,7 @@ HiGenAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
 
     HepMC::GenEvent::particle_const_iterator begin = evt->particles_begin();
     HepMC::GenEvent::particle_const_iterator end = evt->particles_end();
+
     int nparticles=-1;
     for(HepMC::GenEvent::particle_const_iterator it = begin; it != end; ++it){
       nparticles++;
@@ -356,13 +357,13 @@ HiGenAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
       if(eta > 0.5) etabin = 1;
       if(eta > 1.) etabin = 2;
       if(eta < 2.){
-	hev_.ptav[etabin] += pt;
-	++(hev_.n[etabin]);
+		hev_.ptav[etabin] += pt;
+		++(hev_.n[etabin]);
       }
       ++(hev_.mult);
       // if(hev_.mult >= MAXPARTICLES)
       // 	edm::LogError("Number of genparticles exceeds array bounds.");
-    }
+    }	
   }else{
     /*
     edm::Handle<reco::GenParticleCollection> parts;
@@ -410,60 +411,62 @@ HiGenAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
     }
     */
 
+
+	//std::cout << "IN HiGenAnalyzer, in the else" << std::endl;
     
     if(useRefVector_){
       edm::Handle<reco::GenParticleRefVector> parts;
       iEvent.getByToken(genParticleRVSrc_,parts);
-      
+	  //std::cout << "useRefVector" << std::endl; 
       for (reco::GenParticleRefVector::const_iterator it = parts->begin(); it != parts->end(); ++it) {
+		if (stableOnly_ && (*it)->status()!=1) continue;
+		if ((*it)->pt()<ptMin_) continue;
+		if (fabs((*it)->eta())>etaMax_) continue;
+		if (chargedOnly_&&(*it)->charge()==0) continue;
+		if(fabs( (*it)->pdgId())   == 11 ) continue;
+		if(fabs( (*it)->pdgId())   == 15 ) continue;
 	
-	if (stableOnly_ && (*it)->status()!=1) continue;
-	if ((*it)->pt()<ptMin_) continue;
-	if (fabs((*it)->eta())>etaMax_) continue;
-	if (chargedOnly_&&(*it)->charge()==0) continue;
-	if(fabs( (*it)->pdgId())   == 11 ) continue;
-	if(fabs( (*it)->pdgId())   == 15 ) continue;
-	
-	hev_.pt.push_back( (*it)->pt());
-	hev_.eta.push_back( (*it)->eta());
-	hev_.phi.push_back( (*it)->phi());
-	hev_.pdg.push_back( (*it)->pdgId());
-	//hev_.chg.push_back( (*it)->charge());
-	//hev_.sube.push_back( (*it)->collisionId());
-	//hev_.sta.push_back( (*it)->status());
-	++(hev_.mult);
-	
-	
+		hev_.pt.push_back( (*it)->pt());
+		hev_.eta.push_back( (*it)->eta());
+		hev_.phi.push_back( (*it)->phi());
+		hev_.pdg.push_back( (*it)->pdgId());
+		//hev_.chg.push_back( (*it)->charge());
+		//hev_.sube.push_back( (*it)->collisionId());
+		//hev_.sta.push_back( (*it)->status());
+		++(hev_.mult);	
       }
     }
     else{
+	  //std::cout << "!useRefVector" << std::endl; 
       edm::Handle<reco::GenParticleCollection> parts;
       iEvent.getByToken(genParticleSrc_,parts);
+
+	  //std::cout << "input particles, HiGenAnalyzer: " << (*parts).size() << std::endl;
       
       for(UInt_t i = 0; i < parts->size(); ++i){
-	//for(UInt_t i = 0; i < 9; ++i){
-	if(partonMEOnly_ && i>=9) break; 
-	const reco::GenParticle& p = (*parts)[i];
-	if(chargedOnly_ && p.charge() ==0) continue;
+		//for(UInt_t i = 0; i < 9; ++i){
+		if(partonMEOnly_ && i>=9) break; 
+		const reco::GenParticle& p = (*parts)[i];
+		if(chargedOnly_ && p.charge() ==0) continue;
 
-	if(partonMEOnly_ && fabs( p.pdgId())   > 21 ) continue;
+		if(partonMEOnly_ && fabs( p.pdgId())   > 21 ) continue;
 	
-	hev_.pt.push_back( p.pt());
-	hev_.eta.push_back( p.eta());
-	hev_.phi.push_back( p.phi());
-	hev_.pdg.push_back( p.pdgId());
-	//hev_.chg.push_back( p.charge());
-	//hev_.sube.push_back( p.collisionId());
-	hev_.sta.push_back( p.status());
-	++(hev_.mult);
-	
+		hev_.pt.push_back( p.pt());
+		hev_.eta.push_back( p.eta());
+		hev_.phi.push_back( p.phi());
+		hev_.pdg.push_back( p.pdgId());
+		//hev_.chg.push_back( p.charge());
+		//hev_.sube.push_back( p.collisionId());
+		hev_.sta.push_back( p.status());
+		++(hev_.mult);
       }
+	  //std::cout << "output particles, HiGenAnalyzer: " << hev_.mult << std::endl;	  
     }
 
 
-
+	
   }
-  
+
   if(doVertex_){
     edm::Handle<edm::SimVertexContainer> simVertices;
     // iEvent.getByType<edm::SimVertexContainer>(simVertices);

@@ -888,6 +888,8 @@ template <class T>
 std::vector<fastjet::PseudoJet> dynGroomedJets<T>::aggregateHF(const T& jet, float ptCut,
                                                               reco::GenParticleCollection genParticles) const
 {
+    //std::cout << "Aggregating HF at gen level" << std::endl;
+  
     // Input and output particle collections
     std::vector<reco::CandidatePtr> inputConstituents = jet.getJetConstituents();
     std::vector<fastjet::PseudoJet> outputConstituents;
@@ -897,10 +899,11 @@ std::vector<fastjet::PseudoJet> dynGroomedJets<T>::aggregateHF(const T& jet, flo
       // Charge and pt cut
       if(chargedOnly_ && constituent->charge() == 0) continue;
       if(constituent->pt() < ptCut) continue;
-
+	  
       // Match with gen particle -- should be exact match
       int genStatus = trkGenPartMatch(constituent, genParticles, ptCut);
-    
+	  //std::cout << "New jet constituent with pt = " << constituent->pt() << " and status = " << genStatus << std::endl;
+
       // Collect particles coming from HF decays, add the rest directly to the collection
       if (genStatus >= 100) {
 	      hfConstituentsMap[genStatus].push_back(constituent);
@@ -914,15 +917,15 @@ std::vector<fastjet::PseudoJet> dynGroomedJets<T>::aggregateHF(const T& jet, flo
     // Aggregate particles coming from HF decays into pseudo-B/D's 
     // and add them to the collection
     for (auto it = hfConstituentsMap.begin(); it != hfConstituentsMap.end(); ++it) {
-      reco::Candidate::PolarLorentzVector pseudoHF(0., 0., 0., 0.);
+        reco::Candidate::PolarLorentzVector pseudoHF(0., 0., 0., 0.);
         for (reco::CandidatePtr hfConstituent : it->second) {
-        reco::Candidate::PolarLorentzVector productLorentzVector(0., 0., 0., 0.);
-        productLorentzVector.SetPt(hfConstituent->pt());
-        productLorentzVector.SetEta(hfConstituent->eta());
-        productLorentzVector.SetPhi(hfConstituent->phi());
-        productLorentzVector.SetM(hfConstituent->mass());
-        pseudoHF += productLorentzVector;
-        //std::cout << "hf product lorentz vector: " << productLorentzVector << std::endl;
+		  reco::Candidate::PolarLorentzVector productLorentzVector(0., 0., 0., 0.);
+		  productLorentzVector.SetPt(hfConstituent->pt());
+		  productLorentzVector.SetEta(hfConstituent->eta());
+		  productLorentzVector.SetPhi(hfConstituent->phi());
+		  productLorentzVector.SetM(hfConstituent->mass());
+		  pseudoHF += productLorentzVector;
+		  //std::cout << "hf product lorentz vector: " << productLorentzVector << std::endl;
       }
       //std::cout << "added HF to collection" << std::endl;
       outputConstituents.push_back(PseudoJet(pseudoHF.Px(), pseudoHF.Py(), pseudoHF.Pz(), pseudoHF.E()));
