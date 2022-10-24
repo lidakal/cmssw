@@ -59,14 +59,21 @@ process.GlobalTag = GlobalTag(process.GlobalTag, '106X_mc2017_realistic_v8', '')
 process.load("GeneratorInterface.RivetInterface.mergedGenParticles_cfi")
 process.load("PhysicsTools.JetMCAlgos.HFdecayProductTagger_cfi")
 process.HFdecayProductTagger.genParticles = 'mergedGenParticles'
+process.load("RecoBTag.ImpactParameter.impactParameter_EventSetup_cff")
+process.load("RecoBTag.ImpactParameter.pfImpactParameterTagInfos_cfi")
+process.pfImpactParameterTagInfos.candidates  = 'packedPFCandidates'
+process.pfImpactParameterTagInfos.primaryVertex = 'offlineSlimmedPrimaryVertices'
+process.pfImpactParameterTagInfos.jets = 'slimmedJets'
+process.load("RecoBTag.SecondaryVertex.pfInclusiveSecondaryVertexFinderTagInfos_cfi")
+process.pfInclusiveSecondaryVertexFinderTagInfos.extSVCollection = 'slimmedSecondaryVertices'
 process.load("RecoJets.JetProducers.dynGroomedGenJets_cfi")
 process.load("RecoJets.JetProducers.dynGroomedPFJets_cfi")
-process.dynGroomedGenJets.jetSrc = 'slimmedGenJets'
-process.dynGroomedPFJets.jetSrc = 'slimmedJets'
 
 process.jetCluster = cms.Sequence(
     process.mergedGenParticles+
     process.HFdecayProductTagger+
+    process.pfImpactParameterTagInfos+
+    process.pfInclusiveSecondaryVertexFinderTagInfos+
     process.dynGroomedGenJets+
     process.dynGroomedPFJets
 )
@@ -80,7 +87,7 @@ process.output_step = cms.EndPath(process.output)
 process.schedule = cms.Schedule(process.ana_step,process.endjob_step,process.output_step)
 
 #Setup FWK for multithreaded
-process.options.numberOfThreads=cms.untracked.uint32(8)
+process.options.numberOfThreads=cms.untracked.uint32(1)
 process.options.numberOfStreams=cms.untracked.uint32(0)
 process.options.numberOfConcurrentLuminosityBlocks=cms.untracked.uint32(1)
 
