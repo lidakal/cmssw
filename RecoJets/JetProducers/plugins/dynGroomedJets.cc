@@ -65,7 +65,7 @@ private:
 
   int trkInVector(reco::CandidatePtr, std::vector<reco::CandidatePtr>) const;
   int trkGenPartMatch(reco::Jet::Constituent, reco::GenParticleCollection, double) const;
-  vector<PseudoJet> aggregateHF(const T&, float , reco::GenParticleCollection) const;
+  vector<PseudoJet> aggregateHF(const T&, float, reco::GenParticleCollection) const;
   vector<PseudoJet> aggregateHF(const T&, float, const reco::CandIPTagInfo, const reco::CandSecondaryVertexTagInfo&, const reco::GenParticleCollection) const;
 
   EDGetTokenT<View<T> > jetSrc_;
@@ -135,7 +135,7 @@ void dynGroomedJets<T>::produce(StreamID, Event& iEvent, const EventSetup& iSetu
   // stuff for aggregation
   // Grab SV tag info
   edm::Handle<std::vector<reco::CandSecondaryVertexTagInfo>> svTagInfoHandle;
-  if (typeid(T) == typeid(reco::PFJet)) iEvent.getByToken(svTagInfos_, svTagInfoHandle);
+  if (typeid(T) == typeid(pat::Jet)) iEvent.getByToken(svTagInfos_, svTagInfoHandle);
   // Grab gen particles
   edm::Handle<reco::GenParticleCollection> genParticles;
   iEvent.getByToken(genParticleSrc_, genParticles);
@@ -157,7 +157,7 @@ void dynGroomedJets<T>::produce(StreamID, Event& iEvent, const EventSetup& iSetu
 
     // aggregate B based on jet type
     if (aggregateHF_) {
-      if (typeid(T) == typeid(reco::PFJet)) {
+      if (typeid(T) == typeid(pat::Jet)) {
         // Grab IP and SV tag info for jet
         const std::vector<reco::CandSecondaryVertexTagInfo>& svTagInfos = *svTagInfoHandle;
         const reco::CandSecondaryVertexTagInfo& svTagInfo = svTagInfos[jetIndex];
@@ -176,14 +176,14 @@ void dynGroomedJets<T>::produce(StreamID, Event& iEvent, const EventSetup& iSetu
     }
 
     isHardest.push_back(IterativeDeclustering(jetConstituents,subFJ1,subFJ2,constit1,constit2));
-    
+
     BasicJet subjet1, subjet2;
 
     if(isPF){
       subjet1 = ConvertFJ2BasicJet(subFJ1, constit1, pfcands, iSetup);
       subjet2 = ConvertFJ2BasicJet(subFJ2, constit2, pfcands, iSetup);
     }
-    else if(isPackedPF){
+    else{
       subjet1 = ConvertFJ2BasicJet(subFJ1, constit1, pfcandsPacked, iSetup);
       subjet2 = ConvertFJ2BasicJet(subFJ2, constit2, pfcandsPacked, iSetup);
     }
