@@ -55,12 +55,21 @@ process.output = cms.OutputModule(
 from Configuration.AlCa.GlobalTag import GlobalTag
 process.GlobalTag = GlobalTag(process.GlobalTag, '106X_mc2017_realistic_v8', '')
 
+
+process.load("GeneratorInterface.RivetInterface.mergedGenParticles_cfi")
+process.load("PhysicsTools.JetMCAlgos.HFdecayProductTagger_cfi")
+process.HFdecayProductTagger.genParticles = 'mergedGenParticles'
 process.load("RecoJets.JetProducers.dynGroomedGenJets_cfi")
 process.load("RecoJets.JetProducers.dynGroomedPFJets_cfi")
 process.dynGroomedGenJets.jetSrc = 'slimmedGenJets'
 process.dynGroomedPFJets.jetSrc = 'slimmedJets'
 
-process.jetCluster = cms.Sequence(process.dynGroomedGenJets+process.dynGroomedPFJets)
+process.jetCluster = cms.Sequence(
+    process.mergedGenParticles+
+    process.HFdecayProductTagger+
+    process.dynGroomedGenJets+
+    process.dynGroomedPFJets
+)
 
 # Path and EndPath definitions
 process.ana_step = cms.Path(process.jetCluster)
