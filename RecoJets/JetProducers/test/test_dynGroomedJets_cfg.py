@@ -87,7 +87,7 @@ process.output_step = cms.EndPath(process.output)
 process.schedule = cms.Schedule(process.ana_step,process.endjob_step,process.output_step)
 
 #Setup FWK for multithreaded
-process.options.numberOfThreads=cms.untracked.uint32(1)
+process.options.numberOfThreads=cms.untracked.uint32(8)
 process.options.numberOfStreams=cms.untracked.uint32(0)
 process.options.numberOfConcurrentLuminosityBlocks=cms.untracked.uint32(1)
 

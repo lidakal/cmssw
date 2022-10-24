@@ -14,7 +14,6 @@
 
 #include "FWCore/Framework/interface/Frameworkfwd.h"
 #include "FWCore/Framework/interface/global/EDProducer.h"
-#include "FWCore/Framework/interface/ESHandle.h"
 #include "FWCore/Framework/interface/Event.h"
 #include "FWCore/Framework/interface/MakerMacros.h"
 
@@ -160,12 +159,10 @@ void dynGroomedJets<T>::produce(StreamID, Event& iEvent, const EventSetup& iSetu
     if (aggregateHF_) {
       if (typeid(T) == typeid(reco::PFJet)) {
         // Grab IP and SV tag info for jet
-	/*
         const std::vector<reco::CandSecondaryVertexTagInfo>& svTagInfos = *svTagInfoHandle;
         const reco::CandSecondaryVertexTagInfo& svTagInfo = svTagInfos[jetIndex];
         const reco::CandIPTagInfo ipTagInfo = *(svTagInfo.trackIPTagInfoRef().get());
         jetConstituents = aggregateHF(pfjet, constPtCut_, ipTagInfo, svTagInfo, *genParticles);
-	*/
       } else if (typeid(T) == typeid(reco::GenJet)) {
         jetConstituents = aggregateHF(pfjet, constPtCut_, *genParticles);
       }
@@ -472,25 +469,24 @@ std::vector<fastjet::PseudoJet> dynGroomedJets<T>::aggregateHF(const T& jet, flo
     }
   } // end loop over input jet constituents
 
-  // // Aggregate particles coming from HF decays into pseudo-B/C's 
-  // // and add them to the collection
-  // for (auto it = hfConstituentsMap.begin(); it != hfConstituentsMap.end(); ++it) {
-	//   reco::Candidate::PolarLorentzVector pseudoHF(0., 0., 0., 0.);
-  //   for (reco::CandidatePtr hfConstituent : it->second) {
-  //     reco::Candidate::PolarLorentzVector productLorentzVector(0., 0., 0., 0.);
-  //     productLorentzVector.SetPt(hfConstituent->pt());
-  //     productLorentzVector.SetEta(hfConstituent->eta());
-  //     productLorentzVector.SetPhi(hfConstituent->phi());
-  //     productLorentzVector.SetM(hfConstituent->mass());
-  //     pseudoHF += productLorentzVector;
-	//   }
-  //   outputJetConstituents.push_back(PseudoJet(pseudoHF.Px(), pseudoHF.Py(), pseudoHF.Pz(), pseudoHF.E()));
-  // } // end map loop
-
-	//std::cout << "daughter pt: " << constituent->pt() << std::endl;
-	//std::cout << "daughter inSV: " << foundTrackInSV << std::endl;
-	//std::cout << "daughter ip3dSig: " << ip3dSig << std::endl;
-
+  // Aggregate particles coming from HF decays into pseudo-B/C's 
+  for (auto it = hfConstituentsMap.begin(); it != hfConstituentsMap.end(); ++it) {
+    reco::Candidate::PolarLorentzVector pseudoHF(0., 0., 0., 0.);  
+    for (reco::CandidatePtr hfConstituent : it->second) {
+      reco::Candidate::PolarLorentzVector productLorentzVector(0., 0., 0., 0.);
+      productLorentzVector.SetPt(hfConstituent->pt());
+      productLorentzVector.SetEta(hfConstituent->eta());
+      productLorentzVector.SetPhi(hfConstituent->phi());
+      productLorentzVector.SetM(hfConstituent->mass());
+      pseudoHF += productLorentzVector;
+    }  
+    outputJetConstituents.push_back(PseudoJet(pseudoHF.Px(), pseudoHF.Py(), pseudoHF.Pz(), pseudoHF.E()));
+  } // end map loop
+  
+  //std::cout << "daughter pt: " << constituent->pt() << std::endl;
+  //std::cout << "daughter inSV: " << foundTrackInSV << std::endl;
+  //std::cout << "daughter ip3dSig: " << ip3dSig << std::endl;
+  
   //if (isHFproduct) { 
     //std::cout << "is b product" << std::endl;
   //  hfProducts.push_back(constituent);
