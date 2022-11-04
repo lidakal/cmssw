@@ -26,14 +26,14 @@ process.HiForest.HiForestVersion = cms.string(version)
 
 process.source = cms.Source("PoolSource",
     fileNames = cms.untracked.vstring(
-        '/store/himc/RunIIpp5Spring18DR/QCD_pThat-15_bJet_TuneCP5_5p02TeV_pythia8/AODSIM/94X_mc2017_realistic_forppRef5TeV_v1-v1/230000/00D396CF-878A-E911-88E8-14187741278B.root'
+        "/store/himc/RunIIpp5Spring18DR/QCD_pThat-15_bJet_TuneCP5_5p02TeV_pythia8/AODSIM/94X_mc2017_realistic_forppRef5TeV_v1-v1/230000/92D50574-667C-E911-B0CA-1866DAEECF18.root"
         #'file:/data_CMS/cms/mnguyen/00D396CF-878A-E911-88E8-14187741278B.root'
     ),
                             #skipEvents = cms.untracked.uint32(1242)
 )
-# REMOVE AFTERWARDS
-#process.source.lumisToProcess = cms.untracked.VLuminosityBlockRange('1:12258')
-#process.source.eventsToProcess = cms.untracked.VEventRange('1:148503055')
+# Select a specific event (propagated to CRAB => REMOVE AFTERWARDS!)
+# process.source.lumisToProcess = cms.untracked.VLuminosityBlockRange('1:12227')
+# process.source.eventsToProcess = cms.untracked.VEventRange('1:148128582')
 
 # Number of events we want to process, -1 = all events
 process.maxEvents = cms.untracked.PSet(input = cms.untracked.int32(-1))
@@ -126,8 +126,8 @@ process.incomingPartonAna = process.bHadronAna.clone(
 )
 
 process.bDecayAna = process.incomingPartonAna.clone(
-    #genParticleSrc = cms.untracked.InputTag("CheatHFHadronReplacer"),
-    genParticleSrc = cms.untracked.InputTag("CheatHFHadronReplacer"),
+    #genParticleSrc = cms.untracked.InputTag("HFdecayProductTagger"),
+    genParticleSrc = cms.untracked.InputTag("HFdecayProductTagger"),
     partonMEOnly = False,
     chargedOnly = True
 )
@@ -276,24 +276,32 @@ process.dynGroomedGenJets.doLateSD = False
 process.dynGroomedPFJets.doLateSD = False
 
 ## don't change these
-process.genParticlesForJets.undecayHF = cms.bool(False);  
-process.genPartonsForJets.undecayHF = cms.bool(False); 
-process.genParticlesForJets.chargedOnly = cms.bool(False);  
-process.genPartonsForJets.chargedOnly = cms.bool(False);  
+process.genParticlesForJets.undecayHF = cms.bool(False)
+process.genPartonsForJets.undecayHF = cms.bool(False)
+process.genParticlesForJets.chargedOnly = cms.bool(False)  
+process.genPartonsForJets.chargedOnly = cms.bool(False) 
 ## change these to run charged only or full jet declustering
-process.dynGroomedGenJets.chargedOnly = True
-process.dynGroomedPFJets.chargedOnly = True
-process.dynGroomedGenJets.aggregateHF = False
-process.dynGroomedPFJets.aggregateHF = False
+# model_path = cms.string("$CMSSW_BASE/src/RecoHI/HiJetAlgos/data/trained_bst.model")
+# model_path = cms.string("../../../RecoHI/HiJetAlgos/data/trained_bst.model")
+# model_path = cms.string("/grid_mnt/vol_home/llr/cms/kalipoliti/CMSSW_9_4_10/src/RecoHI/HiJetAlgos/data/trained_bst.model")
+model_path = cms.FileInPath("RecoHI/HiJetAlgos/data/trained_bst.model")
+process.dynGroomedGenJets.chargedOnly = cms.bool(True)
+process.dynGroomedGenJets.aggregateHF = cms.bool(True)
+process.dynGroomedGenJets.model_path = model_path
+
+process.dynGroomedPFJets.chargedOnly = cms.bool(True)
+process.dynGroomedPFJets.aggregateHF = cms.bool(True)
+process.dynGroomedPFJets.model_path = model_path
 
 
 ## replace b-hadron decays by the parent
-process.load("RecoHI.HiJetAlgos.CheatHFHadronReplacer_cfi")
-# option to tag B or C daughter in CheatHFHadronReplacer: True for B, False for C
-process.CheatHFHadronReplacer.tagBorC = True
+process.load("RecoHI.HiJetAlgos.HFdecayProductTagger_cfi")
+# option to tag B or C daughter in HFdecayProductTagger: True for B, False for C
+# if aggregateHF == False, the particles will be tagged but not aggregated 
+process.HFdecayProductTagger.tagBorC = cms.bool(True)
 
-process.genJetSequence.insert(0,process.CheatHFHadronReplacer)
-#process.genParticlesForJets.src = 'CheatHFHadronReplacer'
+process.genJetSequence.insert(0,process.HFdecayProductTagger)
+#process.genParticlesForJets.src = 'HFdecayProductTagger'
 
 #process.load("RecoHI.HiJetAlgos.RecoHFHadronReplacer_cfi")
 #process.jetSequence+=process.RecoHFHadronReplacer
