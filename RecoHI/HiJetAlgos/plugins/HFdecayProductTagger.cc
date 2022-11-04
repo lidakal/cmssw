@@ -1,17 +1,17 @@
 // -*- C++ -*-
 //
-// Package:    CheatHFHadronReplacer
-// Class:      CheatHFHadronReplacer
+// Package:    HFdecayProductTagger
+// Class:      HFdecayProductTagger
 //
 
-/**\class CheatHFHadronReplacer CheatHFHadronReplacer.cc
+/**\class HFdecayProductTagger HFdecayProductTagger.cc
 * @brief Given a list of heavy flavour hadrons, produce a genParticle collection replacing their decay products
 *
 * optionally use a pseudo-particle for the HF hadron, composed of only its charged decay products 
 *
 * The description of the run-time parameters can be found at fillDescriptions()
 *
-* The description of the products can be found at CheatHFHadronReplacer()
+* The description of the products can be found at HFdecayProductTagger()
 */
 
 // Original Author:  Matthew Nguyen, LLR
@@ -45,10 +45,10 @@
 
 
 
-class CheatHFHadronReplacer : public edm::global::EDProducer<> {
+class HFdecayProductTagger : public edm::global::EDProducer<> {
 public:
-  explicit CheatHFHadronReplacer(const edm::ParameterSet& cfg);
-  ~CheatHFHadronReplacer() override = default;
+  explicit HFdecayProductTagger(const edm::ParameterSet& cfg);
+  ~HFdecayProductTagger() override = default;
 
   static void fillDescriptions(edm::ConfigurationDescriptions &descriptions);
   
@@ -71,7 +71,7 @@ private:
 
 };
 
-CheatHFHadronReplacer::CheatHFHadronReplacer(const edm::ParameterSet& cfg)
+HFdecayProductTagger::HFdecayProductTagger(const edm::ParameterSet& cfg)
   : genParticlesToken_(consumes<reco::GenParticleCollection>(cfg.getParameter<edm::InputTag>("genParticles"))),
 	tagBorC_(cfg.getParameter<bool>("tagBorC")){
   produces<reco::GenParticleCollection>();
@@ -79,12 +79,12 @@ CheatHFHadronReplacer::CheatHFHadronReplacer(const edm::ParameterSet& cfg)
 
 
 // ------------ method called to produce the data  ------------
-void CheatHFHadronReplacer::produce(edm::StreamID, edm::Event &evt, const edm::EventSetup &setup) const {
+void HFdecayProductTagger::produce(edm::StreamID, edm::Event &evt, const edm::EventSetup &setup) const {
   //std::cout << "Event being processed..." << std::endl;
 
   edm::Handle<reco::GenParticleCollection> genParticles;
   evt.getByToken(genParticlesToken_, genParticles);
-  //std::cout << "nb of input particles, CheatHFHadronReplacer: " << (*genParticles).size() << std::endl;
+  //std::cout << "nb of input particles, HFdecayProductTagger: " << (*genParticles).size() << std::endl;
 
   // Create output collection
   auto outputCollection = std::make_unique<reco::GenParticleCollection>();
@@ -142,7 +142,7 @@ void CheatHFHadronReplacer::produce(edm::StreamID, edm::Event &evt, const edm::E
    	  outputCollection->push_back(genPart);
 	} // end loop over particles
   } // end if tagBorC
-  //std::cout << "nb of output particles in CheatHFHadronReplacer: " << (*outputCollection).size() << std::endl;
+  //std::cout << "nb of output particles in HFdecayProductTagger: " << (*outputCollection).size() << std::endl;
 
   // count charged particles in collection
   //int counts = 0;
@@ -153,7 +153,7 @@ void CheatHFHadronReplacer::produce(edm::StreamID, edm::Event &evt, const edm::E
   evt.put(std::move(outputCollection));
 }
 
-bool CheatHFHadronReplacer::isFinalB(const reco::Candidate &particle) const 
+bool HFdecayProductTagger::isFinalB(const reco::Candidate &particle) const 
 {
   if (!CandMCTagUtils::hasBottom(particle)) return false;
 
@@ -168,7 +168,7 @@ bool CheatHFHadronReplacer::isFinalB(const reco::Candidate &particle) const
 }
 
 
-bool CheatHFHadronReplacer::isFromB( const reco::Candidate &particle) const{
+bool HFdecayProductTagger::isFromB( const reco::Candidate &particle) const{
 
   bool fromB = false;
 
@@ -190,7 +190,7 @@ bool CheatHFHadronReplacer::isFromB( const reco::Candidate &particle) const{
   return fromB;
 }
 
-bool CheatHFHadronReplacer::isFinalC(const reco::Candidate &particle) const {
+bool HFdecayProductTagger::isFinalC(const reco::Candidate &particle) const {
   if (!CandMCTagUtils::hasCharm(particle) ) return false;
 
   // check if any of the daughters is also a c hadron
@@ -204,7 +204,7 @@ bool CheatHFHadronReplacer::isFinalC(const reco::Candidate &particle) const {
 }
 
 
-bool CheatHFHadronReplacer::isFromC( const reco::Candidate &particle) const{
+bool HFdecayProductTagger::isFromC( const reco::Candidate &particle) const{
 
   bool fromC = false;
 
@@ -228,7 +228,7 @@ bool CheatHFHadronReplacer::isFromC( const reco::Candidate &particle) const{
 
 
 /*
-void CheatHFHadronReplacer::visible
+void HFdecayProductTagger::visible
 (
  reco::Candidate::PolarLorentzVector &v, const reco::Candidate &particle, int doCharge) const
 {
@@ -259,7 +259,7 @@ void CheatHFHadronReplacer::visible
   
 }
 */
-reco::GenParticleCollection CheatHFHadronReplacer::addDaughters(const reco::Candidate &particle, reco::GenParticleCollection collection, int hfCode) const {
+reco::GenParticleCollection HFdecayProductTagger::addDaughters(const reco::Candidate &particle, reco::GenParticleCollection collection, int hfCode) const {
 
   reco::GenParticleCollection daughterCollection = collection;
 
@@ -284,14 +284,14 @@ reco::GenParticleCollection CheatHFHadronReplacer::addDaughters(const reco::Cand
 }
 			    
 
-void CheatHFHadronReplacer::fillDescriptions(edm::ConfigurationDescriptions &descriptions) {
+void HFdecayProductTagger::fillDescriptions(edm::ConfigurationDescriptions &descriptions) {
   edm::ParameterSetDescription desc;
   desc.add<edm::InputTag>("genParticles", edm::InputTag("genParticles"));
   desc.add<bool>("tagBorC", true);
-  descriptions.add("CheatHFHadronReplacer", desc);
+  descriptions.add("HFdecayProductTagger", desc);
 }
 
 
-DEFINE_FWK_MODULE(CheatHFHadronReplacer);
+DEFINE_FWK_MODULE(HFdecayProductTagger);
 
 
