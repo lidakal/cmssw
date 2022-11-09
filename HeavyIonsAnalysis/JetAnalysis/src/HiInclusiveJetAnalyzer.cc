@@ -33,6 +33,7 @@ HiInclusiveJetAnalyzer::HiInclusiveJetAnalyzer(const edm::ParameterSet& iConfig)
   trackQuality_ = iConfig.getUntrackedParameter<string>("trackQuality", "highPurity");
 
   jetName_ = iConfig.getUntrackedParameter<string>("jetName");
+  bTagJetName_ = iConfig.getUntrackedParameter<string>("bTagJetName", "");
   doGenTaus_ = iConfig.getUntrackedParameter<bool>("doGenTaus", false);
   doGenSym_ = iConfig.getUntrackedParameter<bool>("doGenSym", false);
   doSubJets_ = iConfig.getUntrackedParameter<bool>("doSubJets", false);
@@ -40,6 +41,8 @@ HiInclusiveJetAnalyzer::HiInclusiveJetAnalyzer(const edm::ParameterSet& iConfig)
   doGenSubJets_ = iConfig.getUntrackedParameter<bool>("doGenSubJets", false);
   if (doGenSubJets_)
     subjetGenTag_ = consumes<reco::JetView>(iConfig.getUntrackedParameter<InputTag>("subjetGenTag"));
+  doTracks_ = iConfig.getUntrackedParameter<bool>("doTracks", false);
+  doSvtx_ = iConfig.getUntrackedParameter<bool>("doSvtx", false);
 
   //reWTA reclustering
   doWTARecluster_ = iConfig.getUntrackedParameter<bool>("doWTARecluster", false);
@@ -69,8 +72,9 @@ HiInclusiveJetAnalyzer::HiInclusiveJetAnalyzer(const edm::ParameterSet& iConfig)
 
   if (isMC_) {
     genjetTag_ = consumes<edm::View<reco::GenJet>>(iConfig.getParameter<InputTag>("genjetTag"));
-    if (useHepMC_)
+    if (useHepMC_) {
       eventInfoTag_ = consumes<HepMCProduct>(iConfig.getParameter<InputTag>("eventInfoTag"));
+    }
     eventGenInfoTag_ = consumes<GenEventInfoProduct>(iConfig.getParameter<InputTag>("eventInfoTag"));
   }
   useRawPt_ = iConfig.getUntrackedParameter<bool>("useRawPt", true);
@@ -94,11 +98,20 @@ HiInclusiveJetAnalyzer::HiInclusiveJetAnalyzer(const edm::ParameterSet& iConfig)
     simpleSVHighPurBJetTags_ = "simpleSecondaryVertexHighPurBJetTags";
     combinedSVV2BJetTags_ = "combinedSecondaryVertexV2BJetTags";
   }
+
   if (doCandidateBtagging_) {
-    deepCSVJetTags_ = jetName_ + "pfDeepCSVJetTags:probb";
-    pfJPJetTags_ = jetName_ + "pfJetProbabilityBJetTags";
+    deepCSVJetTags_ = bTagJetName_ + "pfDeepCSVJetTags:probb";
+    pfJPJetTags_ = bTagJetName_ + "pfJetProbabilityBJetTags";
+    deepFlavourJetTags_ = bTagJetName_ + "pfDeepFlavourJetTags:probb";
   }
   doSubEvent_ = false;
+
+  if (doTracks_) {
+    ipTagInfos_ = bTagJetName_ + "pfImpactParameter";
+  }
+  if (doSvtx_) {
+    svTagInfos_ = bTagJetName_ + "pfSecondaryVertex";
+  }
 
   if (isMC_) {
     genPtMin_ = iConfig.getUntrackedParameter<double>("genPtMin", 10);
@@ -233,6 +246,25 @@ void HiInclusiveJetAnalyzer::beginJob() {
     t->Branch("fHFOOT", jets_.fHFOOT, "fHFOOT[nref]/F");
   }
 
+  if (doTracks_) {
+    t->Branch("jtNtrk", jets_.jtNtrk, "jtNtrk[nref]/I");
+    t->Branch("ntrk", &jets_.ntrk, "ntrk/I");
+    t->Branch("trkJetId", jets_.trkJetId, "trkJetId[ntrk]/I");
+    t->Branch("trkSvtxId", jets_.trkSvtxId, "trkSvtxId[ntrk]/I");
+    t->Branch("trkPt", jets_.trkPt, "trkPt[ntrk]/F");
+    t->Branch("trkEta", jets_.trkEta, "trkEta[ntrk]/F");
+    t->Branch("trkPhi", jets_.trkPhi, "trkPhi[ntrk]/F");
+    t->Branch("trkIp3d", jets_.trkIp3d, "trkIp3d[ntrk]/F");
+    t->Branch("trkIp3dSig", jets_.trkIp3dSig, "trkIp3dSig[ntrk]/F");
+    t->Branch("trkDistToAxisSig", jets_.trkDistToAxisSig, "trkDistToAxisSig[ntrk]/F");
+    t->Branch("trkDistToAxis", jets_.trkDistToAxis, "trkDistToAxis[ntrk]/F");
+  }
+
+  if (doSvtx_) {
+    t->Branch("nsvtx", &jets_.nsvtx, "nsvtx/I");
+    // t->Branch("")
+  }
+
   // Jet ID
   if (doMatch_) {
     t->Branch("matchedPt", jets_.matchedPt, "matchedPt[nref]/F");
@@ -268,7 +300,8 @@ void HiInclusiveJetAnalyzer::beginJob() {
   if(doCandidateBtagging_){
     t->Branch("discr_deepCSV", jets_.discr_deepCSV, "discr_deepCSV[nref]/F");
     t->Branch("discr_pfJP", jets_.discr_pfJP, "discr_pfJP[nref]/F");
-    }
+    t->Branch("discr_deepFlavour", jets_.discr_deepFlavour, "discr_deepFlavour[nref]/F");
+  }
   if (isMC_) {
     if (useHepMC_) {
       t->Branch("beamId1", &jets_.beamId1, "beamId1/I");
@@ -406,6 +439,7 @@ void HiInclusiveJetAnalyzer::beginJob() {
   if (doCandidateBtagging_) {
     memset(jets_.discr_deepCSV, 0, MAXJETS * sizeof(float));
     memset(jets_.discr_pfJP, 0, MAXJETS * sizeof(float));
+    memset(jets_.discr_deepFlavour, 0, MAXJETS * sizeof(float));
   }
 }
 
@@ -443,6 +477,7 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
 
   // FILL JRA TREE
   jets_.nref = 0;
+  if (doTracks_) jets_.ntrk = 0;
 
   if (doJetConstituents_) {
     jets_.jtConstituentsId.clear();
@@ -492,8 +527,9 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
       continue;
 
     if (doCandidateBtagging_){
-      jets_.discr_deepCSV[jets_.nref]=jet.bDiscriminator(deepCSVJetTags_);
-      jets_.discr_pfJP[jets_.nref]=jet.bDiscriminator(pfJPJetTags_);
+      jets_.discr_deepCSV[jets_.nref] = jet.bDiscriminator(deepCSVJetTags_);
+      jets_.discr_pfJP[jets_.nref] = jet.bDiscriminator(pfJPJetTags_);
+      jets_.discr_deepFlavour[jets_.nref] = jet.bDiscriminator(deepFlavourJetTags_);
     }
     if (doLegacyBtagging_) {
       jets_.discr_ssvHighEff[jets_.nref] = jet.bDiscriminator(simpleSVHighEffBJetTags_);
@@ -524,6 +560,43 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
         jets_.mudr[jets_.nref] = 9.9;
         jets_.muptrel[jets_.nref] = 0.0;
         jets_.muchg[jets_.nref] = 0;
+      }
+    }
+
+    if (doTracks_ && jet.hasTagInfo(ipTagInfos_.c_str())) {
+      jets_.jtNtrk[jets_.nref] = 0;
+      const CandIPTagInfo *ipTagInfo = jet.tagInfoCandIP(ipTagInfos_.c_str());
+      const reco::CandSecondaryVertexTagInfo *svTagInfo = nullptr;
+      if (doSvtx_ && jet.hasTagInfo(svTagInfos_.c_str())) {
+          svTagInfo = jet.tagInfoCandSecondaryVertex(svTagInfos_.c_str());
+          std::cout << "jet has " << svTagInfo->nVertices() << " vertices" << std::endl;
+          std::cout << "jet has " << svTagInfo->nSelectedTracks() << " tracks" << std::endl;
+      }
+      for (const auto & trk : ipTagInfo->selectedTracks()) {
+        int itrk = jets_.ntrk + jets_.jtNtrk[jets_.nref];
+
+        jets_.trkJetId[itrk] = jets_.nref;
+        jets_.trkSvtxId[itrk] = -1;
+
+        std::cout << "itrk " << itrk << std::endl;
+        if (doSvtx_ && jet.hasTagInfo(svTagInfos_.c_str())) {
+          // std::cout << "find track result " <<  svTagInfo->findTrack(trk) << std::endl;
+          // jets_.trkSvtxId[itrk] = svTagInfo->findTrack(trk);
+        }
+
+        jets_.trkPt[itrk] = trk->pt();
+        jets_.trkEta[itrk] = trk->eta();
+        jets_.trkPhi[itrk] = trk->phi();
+        
+        reco::btag::TrackIPData ipData = ipTagInfo->impactParameterData()[itrk - jets_.ntrk];
+        std::cout << "ip3d error " << ipData.ip3d.error() << std::endl;
+        std::cout << "dist to axis error " << ipData.distanceToJetAxis.error() << std::endl;
+        jets_.trkIp3d[itrk] = ipData.ip3d.value();
+        jets_.trkIp3dSig[itrk] = ipData.ip3d.significance();
+        jets_.trkDistToAxis[itrk] = ipData.distanceToJetAxis.value();
+        jets_.trkDistToAxisSig[itrk] = ipData.distanceToJetAxis.significance();
+
+        jets_.jtNtrk[jets_.nref]++;
       }
     }
 
@@ -849,6 +922,8 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
       jets_.refparton_flavor[jets_.nref] = -999;
       //      }
     }
+    
+    if (doTracks_) jets_.ntrk += jets_.jtNtrk[jets_.nref];
     jets_.nref++;
   }
 

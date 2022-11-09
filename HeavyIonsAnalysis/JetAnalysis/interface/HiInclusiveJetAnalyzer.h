@@ -106,6 +106,8 @@ private:
   bool doSubJets_;
   bool doJetConstituents_;
   bool doGenSubJets_;
+  bool doTracks_;
+  bool doSvtx_;
 
   TTree* t;
   edm::Service<TFileService> fs1;
@@ -120,9 +122,13 @@ private:
   std::string combinedSVV2BJetTags_;
   std::string deepCSVJetTags_;
   std::string pfJPJetTags_;
+  std::string deepFlavourJetTags_;
+  std::string ipTagInfos_;
+  std::string svTagInfos_;
 
   static const int MAXJETS = 1000;
   static const int MAXTRACKS = 5000;
+  static const int MAXSVTX = 100;
 
   struct JRA {
     int nref=0;
@@ -259,6 +265,7 @@ private:
     float discr_csvV2[MAXJETS]={0};
     float discr_deepCSV[MAXJETS]={0};
     float discr_pfJP[MAXJETS]={0};
+    float discr_deepFlavour[MAXJETS]={0};
     float discr_muByIp3[MAXJETS]={0};
     float discr_muByPt[MAXJETS]={0};
     float discr_prob[MAXJETS]={0};
@@ -277,20 +284,33 @@ private:
     float pdiscr_csvV1[MAXJETS]={0};
     float pdiscr_csvV2[MAXJETS]={0};
 
-    int nsvtx[MAXJETS]={0};
-    int svtxntrk[MAXJETS]={0};
-    float svtxdl[MAXJETS]={0};
-    float svtxdls[MAXJETS]={0};
-    float svtxdl2d[MAXJETS]={0};
-    float svtxdls2d[MAXJETS]={0};
-    float svtxm[MAXJETS]={0};
-    float svtxpt[MAXJETS]={0};
-    float svtxmcorr[MAXJETS]={0};
-    float svtxnormchi2[MAXJETS]={0};
-    float svJetDeltaR[MAXJETS]={0};
-    float svtxTrkSumChi2[MAXJETS]={0};
-    int svtxTrkNetCharge[MAXJETS]={0};
-    int svtxNtrkInCone[MAXJETS]={0};
+    int nsvtx=0;
+    int svtxJetId[MAXSVTX]={0};
+    int svtxNtrk[MAXSVTX]={0};
+    float svtxdl[MAXSVTX]={0};
+    float svtxdls[MAXSVTX]={0};
+    float svtxdl2d[MAXSVTX]={0};
+    float svtxdls2d[MAXSVTX]={0};
+    float svtxm[MAXSVTX]={0};
+    float svtxpt[MAXSVTX]={0};
+    float svtxmcorr[MAXSVTX]={0};
+    float svtxnormchi2[MAXSVTX]={0};
+    float svJetDeltaR[MAXSVTX]={0};
+    float svtxTrkSumChi2[MAXSVTX]={0};
+    int svtxTrkNetCharge[MAXSVTX]={0};
+    int svtxNtrkInCone[MAXSVTX]={0};
+
+    int ntrk=0;
+    int jtNtrk[MAXJETS]={0};
+    int trkJetId[MAXTRACKS]={0};
+    int trkSvtxId[MAXTRACKS]={0};
+    float trkPt[MAXTRACKS]={0};
+    float trkEta[MAXTRACKS]={0};
+    float trkPhi[MAXTRACKS]={0};
+    float trkIp3d[MAXTRACKS]={0};
+    float trkIp3dSig[MAXTRACKS]={0};
+    float trkDistToAxis[MAXTRACKS]={0};
+    float trkDistToAxisSig[MAXTRACKS]={0};
 
     float trackPtRel[MAXTRACKS]={0};
     float trackPtRatio[MAXTRACKS]={0};

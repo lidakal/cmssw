@@ -23,14 +23,18 @@ process.HiForestInfo.info = cms.vstring("HiForest, miniAOD, 106X, mc")
 # input files
 process.source = cms.Source("PoolSource",
     duplicateCheckMode = cms.untracked.string("noDuplicateCheck"),
-                            fileNames = cms.untracked.vstring('/store/mc/RunIISummer19UL17MiniAOD/QCD_Pt_1400to1800_TuneCP5_13TeV_pythia8/MINIAODSIM/106X_mc2017_realistic_v6-v2/100000/BFAAC85A-F5C5-8843-8D2A-76A9E873E24B.root'),
-                        )
-
+    fileNames = cms.untracked.vstring(
+        '/store/mc/RunIISummer19UL17MiniAOD/QCD_Pt_1400to1800_TuneCP5_13TeV_pythia8/MINIAODSIM/106X_mc2017_realistic_v6-v2/100000/BFAAC85A-F5C5-8843-8D2A-76A9E873E24B.root'
+        ),
+    )
 
 # number of events to process, set to -1 to process all events
 process.maxEvents = cms.untracked.PSet(
-    input = cms.untracked.int32(10)
+    input = cms.untracked.int32(1)
     )
+
+# To skip events with 'Found zero products matching all criteria' error
+# process.options = cms.untracked.PSet(SkipEvent = cms.untracked.vstring('ProductNotFound'))
 
 ###############################################################################
 
@@ -117,7 +121,7 @@ process.muonAnalyzer.doGen = cms.bool(True)
 # main forest sequence
 process.forest = cms.Path(
     process.HiForestInfo +
-    #process.hltanalysis +
+    # process.hltanalysis +
     #process.hltobject +
     #process.l1object +
     process.trackSequencePbPb +
@@ -127,38 +131,68 @@ process.forest = cms.Path(
     #process.unpackedMuons +
     #process.correctedElectrons #+
     #process.ggHiNtuplizer +
-    #process.muonAnalyzer
-    process.ak4PFJetAnalyzer
+    #process.muonAnalyzer + 
+    process.ak4PFJetAnalyzer # cms.EDAnalyzer("HiInclusiveJetAnalyzer")
     )
 
 #customisation
 
-addCandidateTagging = False
+addCandidateTagging = True
 
 if addCandidateTagging:
     process.load("HeavyIonsAnalysis.JetAnalysis.candidateBtaggingMiniAOD_cff")
+    bTagPrefix_ = 'TEST'
 
     from PhysicsTools.PatAlgos.tools.jetTools import updateJetCollection
     updateJetCollection(
         process,
         jetSource = cms.InputTag('slimmedJets'),
         jetCorrections = ('AK4PFchs', cms.vstring(['L1FastJet', 'L2Relative', 'L3Absolute']), 'None'),
-        btagDiscriminators = ['pfCombinedSecondaryVertexV2BJetTags', 'pfDeepCSVDiscriminatorsJetTags:BvsAll', 'pfDeepCSVDiscriminatorsJetTags:CvsB', 'pfDeepCSVDiscriminatorsJetTags:CvsL'], ## to add discriminators,
-        btagPrefix = 'TEST',
+        btagDiscriminators = ['pfCombinedSecondaryVertexV2BJetTags', 
+                              'pfDeepCSVJetTags:probb',
+                              'pfDeepCSVJetTags:probc',
+                              'pfDeepCSVJetTags:probudsg',
+                              'pfDeepCSVJetTags:probbb',
+                              'pfDeepFlavourJetTags:probb',
+                              'pfDeepFlavourJetTags:probbb',
+                              'pfDeepFlavourJetTags:problepb',
+                              'pfDeepFlavourJetTags:probc',
+                              'pfDeepFlavourJetTags:probuds',
+                              'pfDeepFlavourJetTags:probg'
+                               ], ## to add discriminators,
+        btagPrefix = bTagPrefix_,
     )
 
     process.updatedPatJets.addJetCorrFactors = False
-    process.updatedPatJets.discriminatorSources = cms.VInputTag(
-        cms.InputTag('pfDeepCSVJetTags:probb'),
-        cms.InputTag('pfDeepCSVJetTags:probc'),
-        cms.InputTag('pfDeepCSVJetTags:probudsg'),
-        cms.InputTag('pfDeepCSVJetTags:probbb'),
+
+    ## NOT NEEDED if the btagDiscriminators are defined correctly in updateJetCollection
+    # process.updatedPatJets.addBTagInfo = True
+    # process.updatedPatJets.addDiscriminators = True
+    # process.updatedPatJets.discriminatorSources = cms.VInputTag(
+        # cms.InputTag('pfDeepCSVJetTags:probb'),
+        # cms.InputTag('pfDeepCSVJetTags:probc'),
+        # cms.InputTag('pfDeepCSVJetTags:probudsg'),
+        # cms.InputTag('pfDeepCSVJetTags:probbb'),
+        # cms.InputTag('pfDeepFlavourJetTags:probb')
+    # )
+
+    ## NEEDED for track aggregation
+    process.updatedPatJets.addTagInfos = True
+    process.updatedPatJets.tagInfoSources = cms.VInputTag(
+        cms.InputTag('pfImpactParameterTagInfos'),
+        cms.InputTag('pfSecondaryVertexTagInfos'),
     )
 
-    process.ak4PFJetAnalyzer.jetTag = "updatedPatJets"
+    # process.pfSecondaryVertexTagInfos.trackSelection.jetDeltaRMax = 0.4
 
     process.forest.insert(1,process.candidateBtagging*process.updatedPatJets)
+    # Note: candidateBtagging includes pfImpactParameterTagInfos
 
+    process.ak4PFJetAnalyzer.jetTag = "updatedPatJets"
+    process.ak4PFJetAnalyzer.bTagJetName = cms.untracked.string("")
+    process.ak4PFJetAnalyzer.doTracks = cms.untracked.bool(True)
+    process.ak4PFJetAnalyzer.doLegacyBtagging = cms.untracked.bool(False)
+    process.ak4PFJetAnalyzer.doSvtx = cms.untracked.bool(True)
 
 #########################
 # Event Selection -> add the needed filters here
