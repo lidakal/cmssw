@@ -24,13 +24,14 @@ process.HiForestInfo.info = cms.vstring("HiForest, miniAOD, 106X, mc")
 process.source = cms.Source("PoolSource",
     duplicateCheckMode = cms.untracked.string("noDuplicateCheck"),
     fileNames = cms.untracked.vstring(
-        '/store/mc/RunIISummer19UL17MiniAOD/QCD_Pt_1400to1800_TuneCP5_13TeV_pythia8/MINIAODSIM/106X_mc2017_realistic_v6-v2/100000/BFAAC85A-F5C5-8843-8D2A-76A9E873E24B.root'
+        # '/store/mc/RunIISummer19UL17MiniAOD/QCD_Pt_1400to1800_TuneCP5_13TeV_pythia8/MINIAODSIM/106X_mc2017_realistic_v6-v2/100000/BFAAC85A-F5C5-8843-8D2A-76A9E873E24B.root'
+        '/store/mc/RunIISummer20UL16MiniAODAPVv2/TTToSemiLeptonic_TuneCP5_13TeV-powheg-pythia8/MINIAODSIM/106X_mcRun2_asymptotic_preVFP_v11-v1/120000/0230C4F8-6445-F74C-8409-27F77DFDE107.root'
         ),
     )
 
 # number of events to process, set to -1 to process all events
 process.maxEvents = cms.untracked.PSet(
-    input = cms.untracked.int32(1)
+    input = cms.untracked.int32(15)
     )
 
 # To skip events with 'Found zero products matching all criteria' error
@@ -105,6 +106,8 @@ process.load("TrackingTools.TransientTrack.TransientTrackBuilder_cfi")
 ################################
 # jet reco sequence
 process.load('HeavyIonsAnalysis.JetAnalysis.ak4PFJetSequence_pponPbPb_mc_cff')
+process.genJetSequence = cms.Sequence()
+process.recoJetSequence = cms.Sequence()
 ################################
 # tracks
 process.load("HeavyIonsAnalysis.TrackAnalysis.TrackAnalyzers_cff")
@@ -124,10 +127,12 @@ process.forest = cms.Path(
     # process.hltanalysis +
     #process.hltobject +
     #process.l1object +
-    process.trackSequencePbPb +
+    # process.trackSequencePbPb +
     process.particleFlowAnalyser +
     process.hiEvtAnalyzer +
     process.HiGenParticleAna +
+    process.genJetSequence + 
+    process.recoJetSequence +
     #process.unpackedMuons +
     #process.correctedElectrons #+
     #process.ggHiNtuplizer +
@@ -185,14 +190,36 @@ if addCandidateTagging:
 
     # process.pfSecondaryVertexTagInfos.trackSelection.jetDeltaRMax = 0.4
 
-    process.forest.insert(1,process.candidateBtagging*process.updatedPatJets)
+    process.recoJetSequence.insert(0, process.candidateBtagging*process.updatedPatJets)
     # Note: candidateBtagging includes pfImpactParameterTagInfos
 
     process.ak4PFJetAnalyzer.jetTag = "updatedPatJets"
     process.ak4PFJetAnalyzer.bTagJetName = cms.untracked.string("")
-    process.ak4PFJetAnalyzer.doTracks = cms.untracked.bool(True)
     process.ak4PFJetAnalyzer.doLegacyBtagging = cms.untracked.bool(False)
+
+doTracks = True
+if doTracks:
+    process.ak4PFJetAnalyzer.doTracks = cms.untracked.bool(True)
+    process.ak4PFJetAnalyzer.chargedOnlyTrk = cms.untracked.bool(True)
+    # process.ak4PFJetAnalyzer.trkPtCut = cms.untracked.double(1.)
+
+doSvtx = True
+if doSvtx:
     process.ak4PFJetAnalyzer.doSvtx = cms.untracked.bool(True)
+
+doDeclustering = True
+doAggregation = False
+doChargedOnly = False
+if doDeclustering:
+    process.load("RecoHI.HiJetAlgos.HFdecayProductTagger_cfi")
+    process.HFdecayProductTagger.genParticles = cms.InputTag("prunedGenParticles")
+    process.HFdecayProductTagger.tagBorC = cms.bool(True) # tag B
+    process.genJetSequence.insert(0, process.HFdecayProductTagger)
+
+    process.load("RecoHI.HiJetAlgos.dynGroomedGenJets_cfi")
+    process.dynGroomedGenJets.chargedOnly = cms.bool(doChargedOnly)
+    process.dynGroomedGenJets.aggregateHF = cms.bool(doAggregation)
+    process.genJetSequence.insert(1, process.dynGroomedGenJets)
 
 #########################
 # Event Selection -> add the needed filters here
