@@ -21,6 +21,7 @@
 #include "SimDataFormats/GeneratorProducts/interface/GenEventInfoProduct.h"
 #include "SimDataFormats/GeneratorProducts/interface/HepMCProduct.h"
 #include "DataFormats/PatCandidates/interface/PackedCandidate.h"
+#include "DataFormats/PatCandidates/interface/PackedGenParticle.h"
 #include "fastjet/contrib/Njettiness.hh"
 //
 
@@ -56,15 +57,17 @@ private:
   double getPtRel(const pat::PackedCandidate& lep, const pat::Jet& jet);
 
   void analyzeSubjets(const reco::Jet& jet);
-  int getGroomedGenJetIndex(const reco::GenJet& jet) const;
+  template <typename jetType>
+  int getGroomedJetIndex(const jetType& jet, const edm::View<reco::Jet> groomedJetsV) const;
   void analyzeRefSubjets(const reco::GenJet& jet);
   void analyzeGenSubjets(const reco::GenJet& jet);
+  int trkGenPartMatch(reco::Jet::Constituent constituent, std::vector<pat::PackedGenParticle> genParticlesV, double ptCut) const;
 
   edm::InputTag jetTagLabel_;
   edm::EDGetTokenT<pat::JetCollection> jetTag_;
   edm::EDGetTokenT<pat::JetCollection> matchTag_;
   edm::EDGetTokenT<edm::View<pat::PackedCandidate>> pfCandidateLabel_;
-  edm::EDGetTokenT<reco::GenParticleCollection> genParticleSrc_;
+  edm::EDGetTokenT<std::vector<pat::PackedGenParticle>> genParticleSrc_;
   edm::EDGetTokenT<edm::View<reco::GenJet>> genjetTag_;
   edm::EDGetTokenT<edm::HepMCProduct> eventInfoTag_;
   edm::EDGetTokenT<GenEventInfoProduct> eventGenInfoTag_;
@@ -79,6 +82,12 @@ private:
   edm::Handle<edm::ValueMap<float>> genSymVM_;
   edm::EDGetTokenT<edm::ValueMap<int>> tokenGenDroppedBranches_;
   edm::Handle<edm::ValueMap<int>> genDroppedBranchesVM_;
+
+  edm::Handle<edm::View<reco::Jet>> groomedJets; 
+  edm::Handle<edm::View<reco::Jet>> groomedGenJets; 
+
+  edm::EDGetTokenT<edm::View<reco::Jet>> groomedJetsToken_;
+  edm::EDGetTokenT<edm::View<reco::Jet>> groomedGenJetsToken_;
 
   bool doMatch_;
   bool useVtx_;
@@ -104,10 +113,15 @@ private:
   bool doGenTaus_;
   bool doGenSym_;
   bool doSubJets_;
+  bool doSubJetsNew_;
   bool doJetConstituents_;
   bool doGenSubJets_;
   bool doTracks_;
+  double trkPtCut_;
+  std::string ipTagInfoLabel_;
   bool doSvtx_;
+  std::string svTagInfoLabel_;
+  bool doJetTrueFlavour_;
 
   TTree* t;
   edm::Service<TFileService> fs1;
@@ -140,6 +154,13 @@ private:
     float jtpt[MAXJETS]={0};
     float jteta[MAXJETS]={0};
     float jtphi[MAXJETS]={0};
+
+    // jet true flavour tagging
+    int jtHadFlav[MAXJETS]={0};
+
+    // jet aggregated pseudo-B mass
+    float jtmB[MAXJETS]={0};
+    float refmB[MAXJETS]={0};
 
     //reWTA reclusted jet axis
     float WTAeta[MAXJETS]={0};
@@ -175,6 +196,24 @@ private:
     std::vector<std::vector<float>> jtSubJetEta = {};
     std::vector<std::vector<float>> jtSubJetPhi = {};
     std::vector<std::vector<float>> jtSubJetM = {};
+
+    float sjt1Pt[MAXJETS] = {0};
+    float sjt1Eta[MAXJETS] = {0};
+    float sjt1Phi[MAXJETS] = {0};
+    float sjt1E[MAXJETS] = {0};
+    float sjt2Pt[MAXJETS] = {0};
+    float sjt2Eta[MAXJETS] = {0};
+    float sjt2Phi[MAXJETS] = {0};
+    float sjt2E[MAXJETS] = {0};
+
+    float rsjt1Pt[MAXJETS] = {0};
+    float rsjt1Eta[MAXJETS] = {0};
+    float rsjt1Phi[MAXJETS] = {0};
+    float rsjt1E[MAXJETS] = {0};
+    float rsjt2Pt[MAXJETS] = {0};
+    float rsjt2Eta[MAXJETS] = {0};
+    float rsjt2Phi[MAXJETS] = {0};
+    float rsjt2E[MAXJETS] = {0};
 
     std::vector<std::vector<int>> jtConstituentsId = {};
     std::vector<std::vector<float>> jtConstituentsE = {};
@@ -285,6 +324,7 @@ private:
     float pdiscr_csvV2[MAXJETS]={0};
 
     int nsvtx=0;
+    int jtNsvtx[MAXJETS]={0};
     int svtxJetId[MAXSVTX]={0};
     int svtxNtrk[MAXSVTX]={0};
     float svtxdl[MAXSVTX]={0};
@@ -311,6 +351,7 @@ private:
     float trkIp3dSig[MAXTRACKS]={0};
     float trkDistToAxis[MAXTRACKS]={0};
     float trkDistToAxisSig[MAXTRACKS]={0};
+    int trkMatchSta[MAXTRACKS]={0};
 
     float trackPtRel[MAXTRACKS]={0};
     float trackPtRatio[MAXTRACKS]={0};

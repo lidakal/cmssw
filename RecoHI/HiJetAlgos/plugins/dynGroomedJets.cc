@@ -26,6 +26,7 @@
 
 #include "DataFormats/Common/interface/View.h"
 #include "DataFormats/ParticleFlowCandidate/interface/PFCandidate.h"
+#include "DataFormats/PatCandidates/interface/PackedCandidate.h"
 
 #include "fastjet/AreaDefinition.hh"
 #include "fastjet/ClusterSequence.hh"
@@ -42,8 +43,10 @@
 #include "DataFormats/BTauReco/interface/SecondaryVertexTagInfo.h"
 #include "DataFormats/TrackReco/interface/Track.h"
 #include "DataFormats/JetReco/interface/Jet.h"
+#include "DataFormats/PatCandidates/interface/Jet.h"
 
 #include "DataFormats/HepMCCandidate/interface/GenParticle.h"
+#include "DataFormats/PatCandidates/interface/PackedGenParticle.h"
 
 #include <xgboost/c_api.h> 
 
@@ -67,41 +70,46 @@ private:
   BasicJet ConvertFJ2BasicJet(PseudoJet *fj, vector<PseudoJet>, Handle<PFCandidateCollection>, const EventSetup& iSetup) const;
 
   int trkInVector(reco::CandidatePtr trk, std::vector<reco::CandidatePtr> tracks) const;
-  int trkGenPartMatch(reco::Jet::Constituent constituent, reco::GenParticleCollection genParticles, double ptCut) const;
-  vector<PseudoJet> aggregateHF(const T& jet, float ptCut, reco::GenParticleCollection genParticles) const;
-  vector<PseudoJet> aggregateHF(const T& jet, float ptCut, const reco::CandIPTagInfo ipTagInfo, const reco::CandSecondaryVertexTagInfo& svTagInfo, const reco::GenParticleCollection genParticles) const;
+  int trkGenPartMatch(reco::Jet::Constituent constituent, std::vector<pat::PackedGenParticle> genParticles, double ptCut) const;
+  vector<PseudoJet> aggregateHF(const T& jet, float ptCut, std::vector<pat::PackedGenParticle> genParticles) const;
+  vector<PseudoJet> aggregateHF(const T& jet, float ptCut, const std::string ipTagInfoLabel_, const std::string svTagInfoLabel_, const std::vector<pat::PackedGenParticle> genParticles) const;
 
   // ------------- member data ----------------------------
   EDGetTokenT<View<T> > jetSrc_;
   EDGetTokenT<PFCandidateCollection> constitSrc_;
-  EDGetTokenT<View<BaseTagInfo>> tagInfoSrc_;
-  const edm::EDGetTokenT<std::vector<reco::CandSecondaryVertexTagInfo>> svTagInfos_;
-  const edm::EDGetTokenT<std::vector<reco::GenParticle>> genParticleSrc_;
+  EDGetTokenT<edm::View<pat::PackedCandidate>>  packedConstitSrc_;
+  const edm::EDGetTokenT<std::vector<reco::CandSecondaryVertexTagInfo>> svTagInfoSrc_;
+  const edm::EDGetTokenT<std::vector<pat::PackedGenParticle>> genParticleSrc_;
   bool writeConstits_;
   bool doLateSD_;
   bool chargedOnly_;
   bool aggregateHF_;
+  std::string ipTagInfoLabel_;
+  std::string svTagInfoLabel_;
   double zcut_;
   double beta_;
   double dynktcut_;
   double rParam_;
+  bool doGenJets_;
 };
 
 template <class T>
 dynGroomedJets<T>::dynGroomedJets(const ParameterSet& iConfig)
   : jetSrc_(consumes<View<T> >(iConfig.getParameter<InputTag>("jetSrc"))),
     constitSrc_(mayConsume<PFCandidateCollection >(iConfig.getParameter<InputTag>("constitSrc"))),
-    tagInfoSrc_(mayConsume<View<BaseTagInfo>>(iConfig.getParameter<InputTag>("ak4PFPfImpactParameterTagInfos"))),
-    svTagInfos_(mayConsume<std::vector<reco::CandSecondaryVertexTagInfo>>(iConfig.getParameter<edm::InputTag>("ak4PFPfInclusiveSecondaryVertexFinderTagInfos"))),
-    genParticleSrc_(mayConsume<vector<GenParticle>>(iConfig.getParameter<InputTag>("HFdecayProductTagger"))),
+    packedConstitSrc_(mayConsume<edm::View<pat::PackedCandidate>>(iConfig.getParameter<edm::InputTag>("constitSrc"))),
+    genParticleSrc_(mayConsume<std::vector<pat::PackedGenParticle>>(iConfig.getParameter<InputTag>("taggedGenParticles"))),
     writeConstits_(iConfig.getParameter<bool>("writeConstits")),
     doLateSD_(iConfig.getParameter<bool>("doLateSD")),
     chargedOnly_(iConfig.getParameter<bool>("chargedOnly")),
-    aggregateHF_(iConfig.getParameter<bool>("aggregateHF")), // whatever is tagged in HFdecayProductTagger will be aggregated
+    aggregateHF_(iConfig.getParameter<bool>("aggregateHF")), // whatever is tagged in taggedGenParticles will be aggregated
+    ipTagInfoLabel_(iConfig.getParameter<std::string>("ipTagInfoLabel")),
+    svTagInfoLabel_(iConfig.getParameter<std::string>("svTagInfoLabel")),
     zcut_(iConfig.getParameter<double>("zcut")),
     beta_(iConfig.getParameter<double>("beta")),
     dynktcut_(iConfig.getParameter<double>("dynktcut")),
-    rParam_(iConfig.getParameter<double>("rParam")){
+    rParam_(iConfig.getParameter<double>("rParam")),
+    doGenJets_(iConfig.getParameter<bool>("doGenJets")) {
   string alias = (iConfig.getParameter<InputTag>("jetSrc")).label();
   produces<BasicJetCollection>().setBranchAlias(alias);
   produces<vector<BasicJet>>("SubJets").setBranchAlias(alias);
@@ -109,7 +117,7 @@ dynGroomedJets<T>::dynGroomedJets(const ParameterSet& iConfig)
 
 template <class T>
 void dynGroomedJets<T>::produce(StreamID, Event& iEvent, const EventSetup& iSetup) const {
-  //std::cout << "In dynGroomedJets" << std::endl;
+  // std::cout << "In dynGroomedJets" << std::endl;
 
   auto jetCollection = make_unique<reco::BasicJetCollection>();
   auto subjetCollection = make_unique<reco::BasicJetCollection>();
@@ -124,100 +132,83 @@ void dynGroomedJets<T>::produce(StreamID, Event& iEvent, const EventSetup& iSetu
   vector<double> area_hardJets;
   vector<bool> isHardest;
 
-  Handle<View<T> > pfjets;
-  iEvent.getByToken(jetSrc_, pfjets);
+  Handle<View<T> > jets;
+  iEvent.getByToken(jetSrc_, jets);
 
   Handle<PFCandidateCollection> pfcands;
-  iEvent.getByToken(constitSrc_, pfcands);
+  bool isPF = iEvent.getByToken(constitSrc_, pfcands);
 
-  // Grab ip tag info
-  edm::Handle<View<BaseTagInfo>> ipTagInfoHandle;
-  if (typeid(T) == typeid(reco::PFJet)) iEvent.getByToken(tagInfoSrc_, ipTagInfoHandle);
-  // Grab SV tag info
-  edm::Handle<std::vector<reco::CandSecondaryVertexTagInfo>> svTagInfoHandle;
-  if (typeid(T) == typeid(reco::PFJet)) iEvent.getByToken(svTagInfos_, svTagInfoHandle);
+  Handle<edm::View<pat::PackedCandidate> > pfcandsPacked;
+  bool isPackedPF = iEvent.getByToken(packedConstitSrc_, pfcandsPacked);
+
+  // -- For aggregation -- //
   // Grab gen particles
-  edm::Handle<reco::GenParticleCollection> genParticles;
+  edm::Handle<std::vector<pat::PackedGenParticle>> genParticles;
   iEvent.getByToken(genParticleSrc_, genParticles);
-  //std::cout << "nb of gen particles in collection: " << (*genParticles).size() << std::endl; 
+  // std::cout << "nb of gen particles in collection: " << (*genParticles).size() << std::endl; 
+  // --------------------- //
 
-
-  indices.resize(pfjets->size());
-  /*    
-  if (typeid(T) == typeid(reco::PFJet)) { 
-    auto ipTagInfo_test = (*svTagInfoHandle)[0].trackIPTagInfoRef().get();
-    cout << typeid(ipTagInfo_test).name() << endl;
-    for (std::vector<reco::CandSecondaryVertexTagInfo>::const_iterator iterTI = svTagInfoHandle->begin(); iterTI != svTagInfoHandle->end(); ++iterTI) {
-      cout << "inside loop" << endl;
-      const reco::CandIPTagInfo& ipTagInfo = *(iterTI->trackIPTagInfoRef().get());
-      const reco::CandSecondaryVertexTagInfo& svTagInfo = *(iterTI);
-    
-      std::cout << "hello" << std::endl;
-    }
-  }
-  */
+  indices.resize(jets->size());
 
   // ptCut to apply on tracks and gen particles
   float ptCut = 1.;
 
-  for (std::size_t jetIndex = 0; jetIndex < (*pfjets).size(); ++jetIndex) { 
-    const T& pfjet = (*pfjets)[jetIndex];
-    cout << "new pfjet" << endl;
-    p4_hardJets.push_back(math::XYZTLorentzVector(pfjet.px(), pfjet.py(), pfjet.pz(), pfjet.energy()));
-    area_hardJets.push_back(pfjet.jetArea());
+  int jetIndex = 0;
+  for (const T& jet : *jets) { 
+    // std::cout << "new jet with pt: " << jet.pt() << std::endl;
+    const reco::GenJet *genJetTemp = jet.genJet();
+    if (genJetTemp) 
+      // std::cout << "\thas gen jet pt: " << genJetTemp->pt() << std::endl;
 
-    vector<PseudoJet> jetConstituents;
-    PseudoJet *subFJ1 = new PseudoJet();
-    PseudoJet *subFJ2 = new PseudoJet();
-    vector<PseudoJet> constit1;
-    vector<PseudoJet> constit2;
-	
-	//std::cout << "\nNew jet with pt: " << pfjet.pt() << std::endl;
+    p4_hardJets.push_back(math::XYZTLorentzVector(jet.px(), jet.py(), jet.pz(), jet.energy()));
+    area_hardJets.push_back(jet.jetArea());
 
-	//for (auto constituent : pfjet.getJetConstituents()) {
-	//  std::cout << "constituent pt: " << constituent->pt() << ", constituent mass: " << constituent->mass() << std::endl;
-	//}
-	//std::cout << "\n" << std::endl;
+    std::vector<fastjet::PseudoJet> jetConstituents = {};
+
+    fastjet::PseudoJet *subFJ1 = new fastjet::PseudoJet();
+    fastjet::PseudoJet *subFJ2 = new fastjet::PseudoJet();
+    std::vector<fastjet::PseudoJet> constit1;
+    std::vector<fastjet::PseudoJet> constit2;
+
     // aggregate B based on jet type
     if (aggregateHF_) {
-      if (typeid(T) == typeid(reco::PFJet)) {
-		    //std::cout << "Aggregating HF for PFJet" << std::endl;
-        // Grab IP and SV tag info for jet
-        const std::vector<reco::CandSecondaryVertexTagInfo>& svTagInfos = *svTagInfoHandle;
-        const reco::CandSecondaryVertexTagInfo& svTagInfo = svTagInfos[jetIndex];
-        const reco::CandIPTagInfo ipTagInfo = *(svTagInfo.trackIPTagInfoRef().get());
-        //std::vector<reco::CandidatePtr> ipTracks = ipTagInfo.selectedTracks();
-        //std::vector<reco::CandidatePtr> svTracks = svTagInfo.vertexTracks();
-
-        jetConstituents = aggregateHF(pfjet, ptCut, ipTagInfo, svTagInfo, *genParticles);
-      } else if (typeid(T) == typeid(reco::GenJet)) {
-		    //std::cout << "Aggregating HF for GenJet" << std::endl;
-        jetConstituents = aggregateHF(pfjet, ptCut, *genParticles);
-      }
+      if (doGenJets_) {
+		    // std::cout << "\tAggregating HF for gen jet" << std::endl;
+        const reco::GenJet *genJet = jet.genJet();
+        if (genJet) jetConstituents = aggregateHF(*genJet, ptCut, *genParticles);
+      } else {
+		    // std::cout << "\tAggregating HF for reco jet" << std::endl;        
+        jetConstituents = aggregateHF(jet, ptCut, ipTagInfoLabel_, svTagInfoLabel_, *genParticles);
+      } 
     } else {
-      for (reco::CandidatePtr constituent : pfjet.getJetConstituents()) {
-        //std::cout << "Not aggregating" << std::endl;
-        //std::cout << "const charge: " << constituent->charge() << std::endl;
-        //std::cout << "const pt: " << constituent->pt() << std::endl;
-        // charge and pt cut
+      // std::cout << "\tNot aggregating" << std::endl;
+      std::vector<reco::CandidatePtr> constituents = {}; 
+      if (doGenJets_) {
+        const reco::GenJet *genJet = jet.genJet();
+        if (genJet) constituents = genJet->getJetConstituents();
+      } else {
+        constituents = jet.getJetConstituents();
+      }
+
+      for (reco::CandidatePtr constituent : constituents) {
         if ((chargedOnly_) && (constituent->charge() == 0)) continue;
         if (constituent->pt() < ptCut) continue;
-		    //std::cout << "const kept" << std::endl;
-        jetConstituents.push_back(PseudoJet(constituent->px(), constituent->py(), constituent->pz(), constituent->energy()));
+        jetConstituents.push_back(fastjet::PseudoJet(constituent->px(), constituent->py(), constituent->pz(), constituent->energy()));
       }
+      // std::cout << "\tjet has " << jetConstituents.size() << " constituents" << std::endl;
     }
-	//std::cout << "nb of jet constituents: " << jetConstituents.size() << std::endl;
-	//for (auto constituent : jetConstituents) {
-	//std::cout << "eta: " << constituent.eta() << std::endl;
-	//std::cout << "phi: " << constituent.phi() << std::endl;
-	//}
+    //std::cout << "nb of jet constituents: " << jetConstituents.size() << std::endl;
+    //for (auto constituent : jetConstituents) {
+    //std::cout << "eta: " << constituent.eta() << std::endl;
+    //std::cout << "phi: " << constituent.phi() << std::endl;
+    //}
 
 
     // Iterative declustering
     isHardest.push_back(IterativeDeclustering(jetConstituents, subFJ1, subFJ2, constit1, constit2));
 
-	//std::cout << "sjt1 pt: " << subFJ1->pt() << std::endl;
-	//std::cout << "sjt2 pt: " << subFJ2->pt() << std::endl;
+    //std::cout << "sjt1 pt: " << subFJ1->pt() << std::endl;
+    //std::cout << "sjt2 pt: " << subFJ2->pt() << std::endl;
 
     // Convert fastjets to basicjets    
     BasicJet subjet1 = ConvertFJ2BasicJet(subFJ1, constit1, pfcands, iSetup);
@@ -233,6 +224,8 @@ void dynGroomedJets<T>::produce(StreamID, Event& iEvent, const EventSetup& iSetu
       if(subFJ2->has_area())subjet2.setJetArea(subFJ2->area());
       subjetCollection->push_back(subjet2);
     }
+
+    jetIndex++;
   }
 
   // put subjets into event record
@@ -267,7 +260,7 @@ void dynGroomedJets<T>::produce(StreamID, Event& iEvent, const EventSetup& iSetu
 }
 
 template <class T>
-BasicJet dynGroomedJets<T>::ConvertFJ2BasicJet(PseudoJet *fj, vector<PseudoJet> constit, Handle<PFCandidateCollection> pfcands, const EventSetup& iSetup) const
+BasicJet dynGroomedJets<T>::ConvertFJ2BasicJet(fastjet::PseudoJet *fj, vector<fastjet::PseudoJet> constit, Handle<PFCandidateCollection> pfcands, const EventSetup& iSetup) const
 {
 
   math::XYZTLorentzVector p4(fj->px(), fj->py(), fj->pz(), fj->e());  
@@ -413,7 +406,7 @@ bool dynGroomedJets<T>::IterativeDeclusteringReco(const T& jet, std::vector<reco
           *sub2 = j2first;
           nsdin=nsplit;
         }
-        double dyn=z*(1-z)*j2.perp()*pow(delta_R/rParam_,dynktcut_);
+        double dyn=z*(1-zreco::GenJet)*j2.perp()*pow(delta_R/rParam_,dynktcut_);
         
         if(dyn>kt1){
           nsel=nsplit;
@@ -524,7 +517,7 @@ bool dynGroomedJets<T>::IterativeDeclustering(const T& jet, PseudoJet *sub1, Pse
 
 /*
 template <class T>
-bool dynGroomedJets<T>::IterativeDeclusteringGen(const T& jet, reco::GenParticleCollection genParticles, float ptCut, fastjet::PseudoJet *sub1, fastjet::PseudoJet *sub2, std::vector<fastjet::PseudoJet>& constit1, std::vector<fastjet::PseudoJet>& constit2) const
+bool dynGroomedJets<T>::IterativeDeclusteringGen(const T& jet, std::vector<pat::PackedGenParticle> genParticles, float ptCut, fastjet::PseudoJet *sub1, fastjet::PseudoJet *sub2, std::vector<fastjet::PseudoJet>& constit1, std::vector<fastjet::PseudoJet>& constit2) const
 {
    
   //  Iterative declustering with aggregation
@@ -705,53 +698,56 @@ bool dynGroomedJets<T>::IterativeDeclustering(vector<PseudoJet> jetConstituents,
 
 
 template <class T>
-void dynGroomedJets<T>::fillDescriptions(ConfigurationDescriptions& descriptions) {
-  ParameterSetDescription desc;
+void dynGroomedJets<T>::fillDescriptions(edm::ConfigurationDescriptions& descriptions) {
+  edm::ParameterSetDescription desc;
   desc.setComment("Dynamically groomed jets");
   desc.add<bool>("writeConstits", false);
   desc.add<bool>("doLateSD", false);
   desc.add<bool>("chargedOnly", false);
   desc.add<bool>("aggregateHF", false);
+  desc.add<std::string>("ipTagInfoLabel", "pfImpactParameter");
+  desc.add<std::string>("svTagInfoLabel", "pfInclusiveSecondaryVertexFinder");
+  desc.add<edm::InputTag>("taggedGenParticles", edm::InputTag("HFdecayProductTagger"));
   desc.add<double>("zcut", 0.1);
   desc.add<double>("beta", 0.0);
   desc.add<double>("dynktcut", 1.0);
   desc.add<double>("rParam", 0.4);
-  if (typeid(T) == typeid(reco::PFJet)) {
-    desc.add<edm::InputTag>("jetSrc", edm::InputTag("ak4PFJets"));
-    desc.add<edm::InputTag>("constitSrc", edm::InputTag("particleFlow"));
-    desc.add<edm::InputTag>("ak4PFPfImpactParameterTagInfos", edm::InputTag("ak4PFPfImpactParameterTagInfos"));
-    desc.add<edm::InputTag>("ak4PFPfInclusiveSecondaryVertexFinderTagInfos", edm::InputTag("ak4PFPfInclusiveSecondaryVertexFinderTagInfos"));
-    desc.add<edm::InputTag>("HFdecayProductTagger", edm::InputTag("HFdecayProductTagger"));
-    descriptions.add("dynGroomedPFJets", desc);
-  }
-  else if (typeid(T) == typeid(reco::GenJet)) {
-    desc.add<edm::InputTag>("jetSrc", edm::InputTag("ak4GenJets"));
-    desc.add<edm::InputTag>("constitSrc", edm::InputTag("genParticles"));
-    desc.add<edm::InputTag>("ak4PFPfImpactParameterTagInfos", edm::InputTag("ak4GenJets"));
-    desc.add<edm::InputTag>("ak4PFPfInclusiveSecondaryVertexFinderTagInfos", edm::InputTag("ak4GenJets"));
-    desc.add<edm::InputTag>("HFdecayProductTagger", edm::InputTag("HFdecayProductTagger"));
-    descriptions.add("dynGroomedGenJets", desc);
-  }
+  desc.add<bool>("doGenJets", false);
+  desc.add<edm::InputTag>("jetSrc", edm::InputTag("slimmedJets"));
+  desc.add<edm::InputTag>("constitSrc", edm::InputTag("packedPFCandidates"));
+  descriptions.add("dynGroomedPATJets", desc);
+  // if (typeid(T) == typeid(pat::Jet)) {
+  //   desc.add<edm::InputTag>("jetSrc", edm::InputTag("slimmedJets"));
+  //   desc.add<edm::InputTag>("constitSrc", edm::InputTag("packedPFCandidates"));
+  //   descriptions.add("dynGroomedPFJets", desc);
+  // }
+  // else if (typeid(T) == typeid(reco::GenJet)) {
+  //   desc.add<edm::InputTag>("jetSrc", edm::InputTag("slimmedGenJets"));
+  //   desc.add<edm::InputTag>("constitSrc", edm::InputTag("packedGenParticles"));
+  //   descriptions.add("dynGroomedGenJets", desc);
+  // }
 
 }
 
 // Function to match reconstructed tracks to gen particles geometrically
 template <class T>
-int dynGroomedJets<T>::trkGenPartMatch(reco::Jet::Constituent constituent, reco::GenParticleCollection genParticles, double ptCut) const
+int dynGroomedJets<T>::trkGenPartMatch(reco::Jet::Constituent constituent, std::vector<pat::PackedGenParticle> genParticles, double ptCut) const
 {
   // return status of matched particle
-  int status = -1;
+  int status = 1;
   
   double dRmin = 100.;
   double dR = dRmin;
 
+  double trkPt = constituent->pt();
   double trkEta = constituent->eta();
   double trkPhi = constituent->phi();
 
-  for (reco::GenParticle genParticle : genParticles) {
+  for (pat::PackedGenParticle genParticle : genParticles) {
     double partPt = genParticle.pt();
+    double relPt = trkPt / partPt;
     //cout << "genParticle status: " << genParticle.status() << endl;
-    if (partPt < ptCut) continue;
+    if (partPt < 0.5 * ptCut) continue;
 	  if(chargedOnly_ && genParticle.charge() == 0) continue;
 	
     double partEta = genParticle.eta();
@@ -761,6 +757,10 @@ int dynGroomedJets<T>::trkGenPartMatch(reco::Jet::Constituent constituent, reco:
     double dPhi = std::acos(std::cos(trkPhi - partPhi));
 
     dR = std::sqrt((dEta * dEta) + (dPhi * dPhi));
+
+    // edit for conservative matching:
+    if (dR > 0.02) continue;
+    if ((relPt < 0.8) || (relPt > 1.2)) continue;
 
     if (dR < dRmin) {
       dRmin = dR;
@@ -785,53 +785,62 @@ int dynGroomedJets<T>::trkInVector(reco::CandidatePtr trk, std::vector<reco::Can
 // Function to aggregate reconstructed tracks into pseudo-B's 
 template <class T>
 std::vector<fastjet::PseudoJet> dynGroomedJets<T>::aggregateHF(const T& jet, float ptCut,
-                                                              const reco::CandIPTagInfo ipTagInfo, 
-                                                              const reco::CandSecondaryVertexTagInfo& svTagInfo,
-                                                              const reco::GenParticleCollection genParticles) const
+                                                               const std::string ipTagInfoLabel_, 
+                                                               const std::string svTagInfoLabel_,
+                                                               const std::vector<pat::PackedGenParticle> genParticles) const
 {
-  std::cout << "Aggregating Bs in reco jet" << std::endl;
+  // std::cout << "Aggregating Bs in reco jet" << std::endl;
   // Input particle collection 
   std::vector<reco::CandidatePtr> inputJetConstituents = jet.getJetConstituents();
+  // std::cout << "Got the jet constituents" << std::endl;
+  // Grab the IP and SV tag info 
+  const reco::CandIPTagInfo *ipTagInfo = jet.tagInfoCandIP(ipTagInfoLabel_.c_str());
+  const reco::CandSecondaryVertexTagInfo *svTagInfo = jet.tagInfoCandSecondaryVertex(svTagInfoLabel_.c_str());
 
-  std::string model_path = "~/gitRepos/jetAnalysis/bdt/saved_models/xgboost_bdt_cmssw.model";
-  // std::vector<std::string> features = {"f0",  "f1",  "f2",  "f3"};
+  bool withBDT = false;
+  if (withBDT) {
+    // Load the BDT 
+    std::string model_path = "~/gitRepos/jetAnalysis/bdt/saved_models/xgboost_bdt_cmssw.model";
+    // std::vector<std::string> features = {"f0",  "f1",  "f2",  "f3"};
 
-  std::cout << "Loading the trained BDT from " << model_path << std::endl;
-  // Declare Object
-  BoosterHandle booster_;
-  // Allocate memory in C style
-  XGBoosterCreate(NULL, 0, &booster_);
-  // Load Model
-  XGBoosterLoadModel(booster_, model_path.c_str()); // second argument should be a const char *.
+    std::cout << "Loading the trained BDT from " << model_path << std::endl;
+    // Declare Object
+    BoosterHandle booster_;
+    // Allocate memory in C style
+    XGBoosterCreate(NULL, 0, &booster_);
+    // Load Model
+    XGBoosterLoadModel(booster_, model_path.c_str()); // second argument should be a const char *.
 
-  const int nFeatures = 4;
-  const int nEntries = 1;
-  const float missing_value = -1000000.;
-  float TestData[nEntries][nFeatures] = {{1, 2., 3., 4.}}; 
-  // Suppose nEntries data points, each data point has nFeatures dimension
-  
-  // Assign data to the "TestData" 2d array ... 
-  // Declare object
-  DMatrixHandle data_;
-  // Allocate memory and use external float array to initialize
-  XGDMatrixCreateFromMat((float *)TestData, nEntries, nFeatures, missing_value, &data_); 
-  // The first argument takes in float * namely 1d float array only, 
-  // 2nd & 3rd: shape of input, 4th: value to replace missing ones
+    const int nFeatures = 4;
+    const int nEntries = 1;
+    const float missing_value = -1000000.;
+    float TestData[nEntries][nFeatures] = {{1, 2., 3., 4.}}; 
+    // Suppose nEntries data points, each data point has nFeatures dimension
+    
+    // Assign data to the "TestData" 2d array ... 
+    // Declare object
+    DMatrixHandle data_;
+    // Allocate memory and use external float array to initialize
+    XGDMatrixCreateFromMat((float *)TestData, nEntries, nFeatures, missing_value, &data_); 
+    // The first argument takes in float * namely 1d float array only, 
+    // 2nd & 3rd: shape of input, 4th: value to replace missing ones
 
-  bst_ulong out_len; // bst_ulong is a typedef of unsigned long
-  const float *f; // array to store predictions
-  XGBoosterPredict(booster_, data_, 0, 0, &out_len, &f);// lower version API
+    bst_ulong out_len; // bst_ulong is a typedef of unsigned long
+    const float *f; // array to store predictions
+    XGBoosterPredict(booster_, data_, 0, 0, &out_len, &f);// lower version API
+    
+  }
 
   // Particle collection to use in the declustering
-  std::vector<fastjet::PseudoJet> outputJetConstituents;
+  std::vector<fastjet::PseudoJet> outputJetConstituents = {};
 
   // Particle collection to aggregate into a pseudo-B 
   //std::vector<reco::CandidatePtr> hfProducts;
   std::map<int, std::vector<reco::CandidatePtr>> hfConstituentsMap;
 
   // Get ipTracks and svTracks for jet
-  std::vector<reco::CandidatePtr> ipTracks = ipTagInfo.selectedTracks();
-  std::vector<reco::CandidatePtr> svTracks = svTagInfo.vertexTracks();
+  std::vector<reco::CandidatePtr> ipTracks = ipTagInfo->selectedTracks();
+  std::vector<reco::CandidatePtr> svTracks = svTagInfo->vertexTracks();
 
   for(reco::CandidatePtr constituent : inputJetConstituents) {
     // Charge and pt cut
@@ -841,19 +850,19 @@ std::vector<fastjet::PseudoJet> dynGroomedJets<T>::aggregateHF(const T& jet, flo
     // Look for track in ipTracks, otherwise discard
     int whichTrack = trkInVector(constituent, ipTracks);
     if (whichTrack < 0) continue;
-    std::cout << "New track!" << std::endl;
+    // std::cout << "New track!" << std::endl;
 
     // Look for track in svTracks
-    int whichTrackInSV = trkInVector(constituent, svTracks);
-    bool inSV = (whichTrackInSV >= 0);
+    // int whichTrackInSV = trkInVector(constituent, svTracks);
+    // bool inSV = (whichTrackInSV >= 0);
 
-    if (inSV) {
-      Measurement1D m1D = svTagInfo.flightDistance(0);
-      std::cout << "svtxdls of sv0: " << m1D.significance() << std::endl;
-    }
+    // if (inSV) {
+    //   Measurement1D m1D = svTagInfo.flightDistance(0);
+    //   std::cout << "svtxdls of sv0: " << m1D.significance() << std::endl;
+    // }
 
     // get ip3dSig
-    reco::btag::TrackIPData IPdata = ipTagInfo.impactParameterData()[whichTrack];
+    // reco::btag::TrackIPData IPdata = ipTagInfo.impactParameterData()[whichTrack];
     // Float_t ip3dSig = IPdata.ip3d.significance();
     // std::cout << "constituent pt: " << constituent->pt() << ", ip data pt: " << ipTracks[whichTrack]->pt() << std::endl;
     // std::cout << "new constituent:" << std::endl;
@@ -861,35 +870,37 @@ std::vector<fastjet::PseudoJet> dynGroomedJets<T>::aggregateHF(const T& jet, flo
     // std::cout << "is in SV = " << inSV << std::endl;
 
     // bool isHFproduct = (inSV && (std::abs(ip3dSig) > 3.)) || (std::abs(ip3dSig) > 9.);
+    // ---- End Aggregating with BDT ---- //
+    
 
-	  // use truth info 
+	  // --- Aggregating with truth info ---- //
     int genStatus = trkGenPartMatch(constituent, genParticles, ptCut);
-    std::cout << "Truth status: " << genStatus << std::endl;
+    // std::cout << "Truth status: " << genStatus << std::endl;
     
     // Collect particles coming from HF decays, add the rest directly to the collection
-  //   if (genStatus >= 100) {
-  //     hfConstituentsMap[genStatus].push_back(constituent);
-	//   	//std::cout << "Found HF constituent" << std::endl;
-  //   } else if (genStatus == 1) {
-  //     outputJetConstituents.push_back(PseudoJet(constituent->px(), constituent->py(), constituent->pz(), constituent->energy()));
-	// 	  //std::cout << "Not a B constituent, added to collection" << std::endl;
-  //   }
+    if (genStatus >= 100) {
+      hfConstituentsMap[genStatus].push_back(constituent);
+	  	// std::cout << "Found HF constituent" << std::endl;
+    } else if (genStatus == 1) {
+      outputJetConstituents.push_back(PseudoJet(constituent->px(), constituent->py(), constituent->pz(), constituent->energy()));
+		  // std::cout << "Not a B constituent, added to collection" << std::endl;
+    }
   } // end loop over input jet constituents
 
-  // // Aggregate particles coming from HF decays into pseudo-B/C's 
-  // // and add them to the collection
-  // for (auto it = hfConstituentsMap.begin(); it != hfConstituentsMap.end(); ++it) {
-	//   reco::Candidate::PolarLorentzVector pseudoHF(0., 0., 0., 0.);
-  //   for (reco::CandidatePtr hfConstituent : it->second) {
-  //     reco::Candidate::PolarLorentzVector productLorentzVector(0., 0., 0., 0.);
-  //     productLorentzVector.SetPt(hfConstituent->pt());
-  //     productLorentzVector.SetEta(hfConstituent->eta());
-  //     productLorentzVector.SetPhi(hfConstituent->phi());
-  //     productLorentzVector.SetM(hfConstituent->mass());
-  //     pseudoHF += productLorentzVector;
-	//   }
-  //   outputJetConstituents.push_back(PseudoJet(pseudoHF.Px(), pseudoHF.Py(), pseudoHF.Pz(), pseudoHF.E()));
-  // } // end map loop
+  // Aggregate particles coming from HF decays into pseudo-B/C's 
+  // and add them to the collection
+  for (auto it = hfConstituentsMap.begin(); it != hfConstituentsMap.end(); ++it) {
+	  reco::Candidate::PolarLorentzVector pseudoHF(0., 0., 0., 0.);
+    for (reco::CandidatePtr hfConstituent : it->second) {
+      reco::Candidate::PolarLorentzVector productLorentzVector(0., 0., 0., 0.);
+      productLorentzVector.SetPt(hfConstituent->pt());
+      productLorentzVector.SetEta(hfConstituent->eta());
+      productLorentzVector.SetPhi(hfConstituent->phi());
+      productLorentzVector.SetM(hfConstituent->mass());
+      pseudoHF += productLorentzVector;
+	  }
+    outputJetConstituents.push_back(PseudoJet(pseudoHF.Px(), pseudoHF.Py(), pseudoHF.Pz(), pseudoHF.E()));
+  } // end map loop
 
 	//std::cout << "daughter pt: " << constituent->pt() << std::endl;
 	//std::cout << "daughter inSV: " << foundTrackInSV << std::endl;
@@ -925,9 +936,9 @@ std::vector<fastjet::PseudoJet> dynGroomedJets<T>::aggregateHF(const T& jet, flo
 // Function to aggregate gen particles coming from B decays into pseudo-B's 
 template <class T>
 std::vector<fastjet::PseudoJet> dynGroomedJets<T>::aggregateHF(const T& jet, float ptCut,
-                                                              reco::GenParticleCollection genParticles) const
+                                                              std::vector<pat::PackedGenParticle> genParticles) const
 {
-    std::cout << "Aggregating HF at gen level" << std::endl;
+    // std::cout << "Aggregating HF at gen level" << std::endl;
   
     // Input and output particle collections
     std::vector<reco::CandidatePtr> inputConstituents = jet.getJetConstituents();
@@ -946,10 +957,10 @@ std::vector<fastjet::PseudoJet> dynGroomedJets<T>::aggregateHF(const T& jet, flo
       // Collect particles coming from HF decays, add the rest directly to the collection
       if (genStatus >= 100) {
 	      hfConstituentsMap[genStatus].push_back(constituent);
-		    //std::cout << "Found HF constituent" << std::endl;
+		    // std::cout << "Found HF constituent" << std::endl;
       } else if (genStatus == 1) {
         outputConstituents.push_back(PseudoJet(constituent->px(), constituent->py(), constituent->pz(), constituent->energy()));
-		    //std::cout << "Not a HF constituent, added to collection" << std::endl;
+		    // std::cout << "Not a HF constituent, added to collection" << std::endl;
       }
     }
 
@@ -958,25 +969,25 @@ std::vector<fastjet::PseudoJet> dynGroomedJets<T>::aggregateHF(const T& jet, flo
     for (auto it = hfConstituentsMap.begin(); it != hfConstituentsMap.end(); ++it) {
         reco::Candidate::PolarLorentzVector pseudoHF(0., 0., 0., 0.);
         for (reco::CandidatePtr hfConstituent : it->second) {
-		  reco::Candidate::PolarLorentzVector productLorentzVector(0., 0., 0., 0.);
-		  productLorentzVector.SetPt(hfConstituent->pt());
-		  productLorentzVector.SetEta(hfConstituent->eta());
-		  productLorentzVector.SetPhi(hfConstituent->phi());
-		  productLorentzVector.SetM(hfConstituent->mass());
-		  pseudoHF += productLorentzVector;
-		  //std::cout << "hf product lorentz vector: " << productLorentzVector << std::endl;
+          reco::Candidate::PolarLorentzVector productLorentzVector(0., 0., 0., 0.);
+          productLorentzVector.SetPt(hfConstituent->pt());
+          productLorentzVector.SetEta(hfConstituent->eta());
+          productLorentzVector.SetPhi(hfConstituent->phi());
+          productLorentzVector.SetM(hfConstituent->mass());
+          pseudoHF += productLorentzVector;
+          //std::cout << "hf product lorentz vector: " << productLorentzVector << std::endl;
       }
-      //std::cout << "added HF to collection" << std::endl;
+      // std::cout << "added HF to collection" << std::endl;
       outputConstituents.push_back(PseudoJet(pseudoHF.Px(), pseudoHF.Py(), pseudoHF.Pz(), pseudoHF.E()));
     }
   return outputConstituents;
 }
   
-
-
-using dynGroomedGenJets = dynGroomedJets<reco::GenJet>;
-using dynGroomedPFJets = dynGroomedJets<reco::PFJet>;
+// using dynGroomedGenJets = dynGroomedJets<reco::GenJet>;
+// using dynGroomedPFJets = dynGroomedJets<pat::Jet>;
+using dynGroomedPATJets = dynGroomedJets<pat::Jet>;
 
 // define this as a plug-in
-DEFINE_FWK_MODULE(dynGroomedPFJets);
-DEFINE_FWK_MODULE(dynGroomedGenJets);
+// DEFINE_FWK_MODULE(dynGroomedPFJets);
+// DEFINE_FWK_MODULE(dynGroomedGenJets);
+DEFINE_FWK_MODULE(dynGroomedPATJets);
