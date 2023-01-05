@@ -89,10 +89,6 @@ trackGenAssociationProducer::trackGenAssociationProducer(const edm::ParameterSet
   genParticlesToken_ = consumes<std::vector<GenType>>(cfg.getParameter<edm::InputTag>("genParticleSrc"));
   packedCandidatesToken_ = consumes<std::vector<TrackType>>(cfg.getParameter<edm::InputTag>("pfCandidateSrc"));
 
-  // [DEBUG] 
-  inputJetsToken_ = consumes<std::vector<pat::Jet>>(cfg.getParameter<edm::InputTag>("jetSrc"));
-  // 
-
   maxDR2_ = cfg.getUntrackedParameter<double>("maxDR2", 0.0004);
   minRelPt_ = cfg.getUntrackedParameter<double>("minRelPt", 0.8);
   maxRelPt_ = cfg.getUntrackedParameter<double>("maxRelPt", 1.2);
@@ -117,11 +113,6 @@ void trackGenAssociationProducer::produce(edm::StreamID, edm::Event &evt, const 
   // Grab the gen particles
   edm::Handle<std::vector<GenType>> genParticles;
   evt.getByToken(genParticlesToken_, genParticles);
-
-  // [DEBUG]
-  std::cout << "nb of input gen particles, trackGenAssociationProducer: " << (*genParticles).size() << std::endl;
-  std::cout << "nb of input pf candidates, trackGenAssociationProducer: " << (*pfCandidates).size() << std::endl;
-  //
 
   // Create output collection
   std::unique_ptr<MapType> trackGenMap = std::make_unique<MapType>(pfCandidates, genParticles);
@@ -160,30 +151,7 @@ void trackGenAssociationProducer::produce(edm::StreamID, edm::Event &evt, const 
       trackGenMap->insert(pfCandRef, matchedGenParticleRef);
     }  
     countCharged++;
-  }
-
-  // [DEBUG]
-  std::cout << "charged candidates: " << countCharged << std::endl;
-  std::cout << "entries in map: " << trackGenMap->size() << std::endl;
-
-  // [DEBUG] Go over jet constituents and see matched particle 
-  // for (const pat::Jet& jet : *inputJets) {
-  //   std::cout << "new jet " << std::endl;
-  //   const std::vector<edm::Ptr<reco::Candidate>> jetConstituents = jet.getJetConstituents();
-  //   for (size_t icand = 0; icand < jetConstituents.size(); icand++) {
-  //     // const edm::Ptr<reco::Candidate> cand = jetConstituents[icand];
-  //     // get reference 
-  //     reco::CandidateRef candRef(jetConstituents, icand);
-  //     std::cout << candRef->pt() << std::endl;
-
-  //     if (trackGenMap->find(candRef) != trackGenMap->end()) { 
-  //       std::cout << "\ticand : " << icand << " match pt : " <<  (*(*trackGenMap)[candRef]).pt() << std::endl;
-  //     }
-  //   }
-  // }
-
-
-  
+  }  
   evt.put(std::move(trackGenMap));
 }
 
