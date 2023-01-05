@@ -6,6 +6,7 @@
 #include "AnalysisDataFormats/TrackInfo/interface/TPtoRecoTrackCollection.h"
 #include "AnalysisDataFormats/TrackInfo/interface/RecoTracktoTP.h"
 #include "AnalysisDataFormats/TrackInfo/interface/RecoTracktoTPCollection.h"
+#include "AnalysisDataFormats/TrackInfo/interface/TrackGenAssociation.h"
 #include <vector>
 
 
