@@ -22,7 +22,7 @@
 #include <utility>
 #include <vector>
 #include <algorithm>
-#include <unordered_map>
+#include <map>
 
 // user include files
 #include "FWCore/Framework/interface/Frameworkfwd.h"
@@ -38,6 +38,7 @@
 #include "FWCore/Framework/interface/EventSetup.h"
 #include "FWCore/Utilities/interface/EDPutToken.h"
 
+#include "DataFormats/PatCandidates/interface/PackedCandidate.h"
 #include "DataFormats/HepMCCandidate/interface/GenParticle.h"
 #include "DataFormats/PatCandidates/interface/PackedGenParticle.h"
 
@@ -47,6 +48,9 @@
 #include "DataFormats/Math/interface/deltaR.h"
 
 #include "DataFormats/PatCandidates/interface/Jet.h"
+
+#include "DataFormats/Common/interface/AssociationMap.h"
+#include "AnalysisDataFormats/TrackInfo/interface/TrackGenAssociation.h"
 
 
 class trackGenAssociationProducer : public edm::global::EDProducer<> {
@@ -59,10 +63,21 @@ public:
 
 private:
   // Definitions 
-  typedef std::unordered_map<const reco::Candidate *, const pat::PackedGenParticle *> trackGenMap;
+  typedef reco::TrackGenAssociationCollection MapType;
+  typedef pat::PackedCandidate TrackType;
+  typedef pat::PackedGenParticle GenType;
+
+  // [DEBUG]
+  typedef pat::Jet JetType;  
+  // 
+
   // Configurables
-  edm::EDGetTokenT<std::vector<pat::PackedGenParticle>> genParticlesToken_;
-  edm::EDGetTokenT<std::vector<pat::Jet>> inputJetsToken_;
+  edm::EDGetTokenT<std::vector<GenType>> genParticlesToken_;
+  edm::EDGetTokenT<std::vector<TrackType>> packedCandidatesToken_;
+
+  // [DEBUG]
+  edm::EDGetTokenT<std::vector<JetType>> inputJetsToken_;
+  //
 
   double maxDR2_;
   double minRelPt_;
@@ -71,70 +86,105 @@ private:
 
 trackGenAssociationProducer::trackGenAssociationProducer(const edm::ParameterSet& cfg) {
   // Initialize configurables
+  genParticlesToken_ = consumes<std::vector<GenType>>(cfg.getParameter<edm::InputTag>("genParticleSrc"));
+  packedCandidatesToken_ = consumes<std::vector<TrackType>>(cfg.getParameter<edm::InputTag>("pfCandidateSrc"));
+
+  // [DEBUG] 
   inputJetsToken_ = consumes<std::vector<pat::Jet>>(cfg.getParameter<edm::InputTag>("jetSrc"));
-  genParticlesToken_ = consumes<std::vector<pat::PackedGenParticle>>(cfg.getParameter<edm::InputTag>("genParticleSrc"));
+  // 
+
   maxDR2_ = cfg.getUntrackedParameter<double>("maxDR2", 0.0004);
   minRelPt_ = cfg.getUntrackedParameter<double>("minRelPt", 0.8);
   maxRelPt_ = cfg.getUntrackedParameter<double>("maxRelPt", 1.2);
 
-  produces<std::unique_ptr<trackGenMap>>("trackGenMap");
+  produces<MapType>();
 }
 
 
 // ------------ method called to produce the data  ------------
 void trackGenAssociationProducer::produce(edm::StreamID, edm::Event &evt, const edm::EventSetup &setup) const {
-  //std::cout << "Event being processed..." << std::endl;
   std::cout << "trackGenAssociationProducer produce" << std::endl;
 
-  // Grab the jets
-  edm::Handle<std::vector<pat::Jet>> inputJets;
+  // [DEBUG] Grab the jets
+  edm::Handle<std::vector<JetType>> inputJets;
   evt.getByToken(inputJetsToken_, inputJets);
+  //
+
+  // Grab the pf candidates
+  edm::Handle<std::vector<TrackType>> pfCandidates;
+  evt.getByToken(packedCandidatesToken_, pfCandidates);
 
   // Grab the gen particles
-  edm::Handle<std::vector<pat::PackedGenParticle>> genParticles;
+  edm::Handle<std::vector<GenType>> genParticles;
   evt.getByToken(genParticlesToken_, genParticles);
 
-  std::cout << "nb of input particles, trackGenAssociationProducer: " << (*genParticles).size() << std::endl;
+  // [DEBUG]
+  std::cout << "nb of input gen particles, trackGenAssociationProducer: " << (*genParticles).size() << std::endl;
+  std::cout << "nb of input pf candidates, trackGenAssociationProducer: " << (*pfCandidates).size() << std::endl;
+  //
 
   // Create output collection
-  std::unique_ptr<trackGenMap> trackGenMapPtr = std::make_unique<trackGenMap>();
+  std::unique_ptr<MapType> trackGenMap = std::make_unique<MapType>(pfCandidates, genParticles);
+ 
+  // Go over the charged PF candidates
+  int countCharged = 0;
+  for (size_t icand = 0; icand < pfCandidates->size(); icand++) {
+    const pat::PackedCandidate& pfCand = pfCandidates->at(icand);
+    if (pfCand.charge() == 0) continue;
 
-  // Go over the jets
-  for (const pat::Jet& jet : *inputJets) {
-    // Go over the jet constituents
-    const std::vector<reco::CandidatePtr> constituents = jet.getJetConstituents();
-    
-    for (const reco::CandidatePtr constituent : constituents) {
-      if (constituent->charge() == 0) continue;
+    // Look for match in charged gen particles 
+    double minDR2 = std::numeric_limits<double>::max();
 
-      // [DEBUG]: 
-      // std::cout << "edm::Ptr<reco::Candidate> " << consituent << std::endl;
-      // std::cout << "reco::Candidate * " << consituent << std::endl;
+    int imatch = -1;
+    for (size_t igen = 0; igen < genParticles->size(); igen++) {
+      const GenType& genParticle = genParticles->at(igen);
+      if (genParticle.charge() == 0) continue;
+
+      double DR2 = reco::deltaR2(pfCand, genParticle);
+      if (DR2 > maxDR2_) continue;
+
+      double relPt = pfCand.pt() / genParticle.pt();
+      if (relPt < minRelPt_ || relPt > maxRelPt_) continue;
+
+      if (DR2 < minDR2) {
+        minDR2 = DR2;
+        imatch = igen;
+      }
+    } // end gen particle loop
+
+    if (imatch >= 0) {
+      // get references
+      pat::PackedCandidateRef pfCandRef(pfCandidates, icand);
+      pat::PackedGenParticleRef matchedGenParticleRef(genParticles, imatch);
+
+      trackGenMap->insert(pfCandRef, matchedGenParticleRef);
+    }  
+    countCharged++;
+  }
+
+  // [DEBUG]
+  std::cout << "charged candidates: " << countCharged << std::endl;
+  std::cout << "entries in map: " << trackGenMap->size() << std::endl;
+
+  // [DEBUG] Go over jet constituents and see matched particle 
+  // for (const pat::Jet& jet : *inputJets) {
+  //   std::cout << "new jet " << std::endl;
+  //   const std::vector<edm::Ptr<reco::Candidate>> jetConstituents = jet.getJetConstituents();
+  //   for (size_t icand = 0; icand < jetConstituents.size(); icand++) {
+  //     // const edm::Ptr<reco::Candidate> cand = jetConstituents[icand];
+  //     // get reference 
+  //     reco::CandidateRef candRef(jetConstituents, icand);
+  //     std::cout << candRef->pt() << std::endl;
+
+  //     if (trackGenMap->find(candRef) != trackGenMap->end()) { 
+  //       std::cout << "\ticand : " << icand << " match pt : " <<  (*(*trackGenMap)[candRef]).pt() << std::endl;
+  //     }
+  //   }
+  // }
 
 
-      // Look for match in gen particles 
-      double minDR2 = std::numeric_limits<double>::max();
-
-      for (const pat::PackedGenParticle& genParticle : *genParticles) {
-        if (genParticle.charge() == 0) continue;
-
-        double DR2 = reco::deltaR2(*constituent, genParticle);
-        if (DR2 > maxDR2_) continue;
-
-        double relPt = (*constituent).pt() / genParticle.pt();
-        if (relPt < minRelPt_ || relPt > maxRelPt_) continue;
-
-        if (DR2 < minDR2) {
-          minDR2 = DR2;
-          (*trackGenMapPtr)[constituent.get()] = &genParticle;
-        }
-      } // end gen particle loop
-    } // end consituent loop   
-  } // end jet loop
-
-  std::cout << "entries in map: " << (*trackGenMapPtr).size() << std::endl;
   
-  evt.put(std::move(trackGenMapPtr));
+  evt.put(std::move(trackGenMap));
 }
 
 void trackGenAssociationProducer::fillDescriptions(edm::ConfigurationDescriptions& descriptions) {
@@ -142,6 +192,7 @@ void trackGenAssociationProducer::fillDescriptions(edm::ConfigurationDescription
   desc.setComment("track to gen particle association map");
   desc.add<edm::InputTag>("jetSrc", edm::InputTag("slimmedJets"));
   desc.add<edm::InputTag>("genParticleSrc", edm::InputTag("packedGenParticles"));
+  desc.add<edm::InputTag>("pfCandidateSrc", edm::InputTag("packedPFCandidates"));
 
   desc.addUntracked<double>("maxDR2", 0.0004);
   desc.addUntracked<double>("minRelPt", 0.8);
