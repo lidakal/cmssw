@@ -7,6 +7,7 @@
 #include "AnalysisDataFormats/TrackInfo/interface/RecoTracktoTP.h"
 #include "AnalysisDataFormats/TrackInfo/interface/RecoTracktoTPCollection.h"
 #include "AnalysisDataFormats/TrackInfo/interface/TrackGenAssociation.h"
+#include "AnalysisDataFormats/TrackInfo/interface/TrackToGenParticleMap.h"
 #include <vector>
 
 

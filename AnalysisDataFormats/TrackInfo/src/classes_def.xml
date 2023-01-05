@@ -48,4 +48,7 @@
   <class name="edm::Wrapper<edm::AssociationMap<edm::OneToOne<std::vector<pat::PackedCandidate>, std::vector<pat::PackedGenParticle>, unsigned int>>>" />
   <class name="edm::helpers::KeyVal<edm::RefProd<std::vector<pat::PackedCandidate> >,edm::RefProd<vector<pat::PackedGenParticle> > >" />
 
+  <class name="std::map<edm::Ptr<reco::Candidate>, edm::Ptr<pat::PackedGenParticle>>" />
+  <class name="edm::Wrapper<std::map<edm::Ptr<reco::Candidate>, edm::Ptr<pat::PackedGenParticle>>>" />
+  <class name="std::pair<const edm::Ptr<reco::Candidate>,edm::Ptr<pat::PackedGenParticle>>" />
 </lcgdict>
