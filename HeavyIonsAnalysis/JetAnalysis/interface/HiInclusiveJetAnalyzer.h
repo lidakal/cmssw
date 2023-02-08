@@ -23,6 +23,8 @@
 #include "DataFormats/PatCandidates/interface/PackedCandidate.h"
 #include "DataFormats/PatCandidates/interface/PackedGenParticle.h"
 #include "fastjet/contrib/Njettiness.hh"
+#include "AnalysisDataFormats/TrackInfo/interface/TrackToGenParticleMap.h"
+#include "DataFormats/PatCandidates/interface/PackedGenParticle.h"
 //
 
 /**\class HiInclusiveJetAnalyzer
@@ -89,6 +91,15 @@ private:
   edm::EDGetTokenT<edm::View<reco::Jet>> groomedJetsToken_;
   edm::EDGetTokenT<edm::View<reco::Jet>> groomedGenJetsToken_;
 
+  edm::EDGetTokenT<edm::View<pat::PackedCandidate>> pseudoHFToken_;
+  edm::EDGetTokenT<edm::View<pat::PackedCandidate>> pseudoHFGenToken_;
+
+  edm::EDGetTokenT<reco::TrackToGenParticleMap> trackToGenParticleMapToken_;
+
+  // [DEBUG]
+  edm::EDGetTokenT<std::vector<reco::Vertex>> primaryVerticesToken_;
+  edm::Handle<std::vector<reco::Vertex>> primaryVertices;
+
   bool doMatch_;
   bool useVtx_;
   bool useRawPt_;
@@ -149,6 +160,8 @@ private:
     int run=0;
     int evt=0;
     int lumi=0;
+
+    int nvtx=0;
 
     float rawpt[MAXJETS]={0};
     float jtpt[MAXJETS]={0};
@@ -304,7 +317,10 @@ private:
     float discr_csvV2[MAXJETS]={0};
     float discr_deepCSV[MAXJETS]={0};
     float discr_pfJP[MAXJETS]={0};
-    float discr_deepFlavour[MAXJETS]={0};
+    float discr_deepFlavour_b[MAXJETS]={0};
+    float discr_deepFlavour_bb[MAXJETS]={0};
+    float discr_deepFlavour_lepb[MAXJETS]={0};
+    float discr_deepFlavour_c[MAXJETS]={0};
     float discr_muByIp3[MAXJETS]={0};
     float discr_muByPt[MAXJETS]={0};
     float discr_prob[MAXJETS]={0};
@@ -349,8 +365,11 @@ private:
     float trkPhi[MAXTRACKS]={0};
     float trkIp3d[MAXTRACKS]={0};
     float trkIp3dSig[MAXTRACKS]={0};
+    float trkIp2d[MAXTRACKS]={0};
+    float trkIp2dSig[MAXTRACKS]={0};
     float trkDistToAxis[MAXTRACKS]={0};
     float trkDistToAxisSig[MAXTRACKS]={0};
+    int trkPdgId[MAXTRACKS]={0};
     int trkMatchSta[MAXTRACKS]={0};
 
     float trackPtRel[MAXTRACKS]={0};

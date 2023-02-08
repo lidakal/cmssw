@@ -58,7 +58,8 @@ public:
 
 private:
   // Definitions 
-  typedef pat::Jet JetType;  
+  typedef pat::Jet JetType; 
+  typedef reco::GenJet GenJetType; 
 
   typedef reco::TrackToGenParticleMap MapType;
 
@@ -66,9 +67,7 @@ private:
   typedef TrackTypePtr::value_type TrackType;
   
   typedef MapType::mapped_type GenTypePtr; 
-  typedef GenTypePtr::value_type GenType;
-
-  
+  typedef GenTypePtr::value_type GenType;  
   
   // Configurables
   edm::EDGetTokenT<std::vector<GenType>> genParticlesToken_;
@@ -88,7 +87,8 @@ TrackToGenParticleMapProducer::TrackToGenParticleMapProducer(const edm::Paramete
   minRelPt_ = cfg.getUntrackedParameter<double>("minRelPt", 0.8);
   maxRelPt_ = cfg.getUntrackedParameter<double>("maxRelPt", 1.2);
 
-  produces<MapType>();
+  produces<MapType>("trackToGenParticleMap");
+  produces<MapType>("genConstitToGenParticleMap");
 }
 
 
@@ -103,12 +103,15 @@ void TrackToGenParticleMapProducer::produce(edm::StreamID, edm::Event &evt, cons
   edm::Handle<std::vector<GenType>> genParticles;
   evt.getByToken(genParticlesToken_, genParticles);
 
-  // Create output collection
+  // Create output collections
   std::unique_ptr<MapType> trackToGenParticleMap = std::make_unique<MapType>();
+  std::unique_ptr<MapType> genConstitToGenParticleMap = std::make_unique<MapType>();
 
-  // Go over the charged jet constitPtruents (aka tracks)
+  
   for (const JetType jet : *inputJets) {
     // std::cout << "New jet" << std::endl;
+
+    // Go over the charged jet constituents (aka tracks)
     for (const TrackTypePtr constitPtr : jet.getJetConstituents()) {
       if (constitPtr->charge() == 0) continue;
 
@@ -132,15 +135,49 @@ void TrackToGenParticleMapProducer::produce(edm::StreamID, edm::Event &evt, cons
           matchGenParticle = genParticlePtr;
         }
       } // end gen particle loop
-    if (matchGenParticle.isNonnull()) trackToGenParticleMap->insert(std::pair<TrackTypePtr, GenTypePtr>(constitPtr, matchGenParticle));
+    if (matchGenParticle.isNonnull()) 
+      trackToGenParticleMap->insert(std::pair<TrackTypePtr, GenTypePtr>(constitPtr, matchGenParticle));
+    }
+
+    // grab the gen jet
+    const GenJetType *genJet = jet.genJet();
+    if (!genJet) continue;
+
+    // Go over the charged gen jet constituents 
+    for (const TrackTypePtr constitPtr : genJet->getJetConstituents()) {
+      if (constitPtr->charge() == 0) continue;
+
+      // Look for match in charged gen particles 
+      double minDR2 = std::numeric_limits<double>::max();
+      GenTypePtr matchGenParticle;
+
+      for (size_t igen = 0; igen < (*genParticles).size(); igen++) {
+        edm::Ref<std::vector<GenType>> genParticleRef_(genParticles, int(igen));
+        GenTypePtr genParticlePtr = edm::refToPtr(genParticleRef_);
+        if (genParticlePtr->charge() == 0) continue;
+
+        double DR2 = reco::deltaR2(*constitPtr, *genParticlePtr);
+        if (DR2 > maxDR2_) continue;
+
+        double relPt = constitPtr->pt() / genParticlePtr->pt();
+        if (relPt < minRelPt_ || relPt > maxRelPt_) continue;
+
+        if (DR2 < minDR2) {
+          minDR2 = DR2;
+          matchGenParticle = genParticlePtr;
+        }
+      } // end gen particle loop
+    if (matchGenParticle.isNonnull()) 
+      genConstitToGenParticleMap->insert(std::pair<TrackTypePtr, GenTypePtr>(constitPtr, matchGenParticle));
     }
   }
-  evt.put(std::move(trackToGenParticleMap));
+  evt.put(std::move(trackToGenParticleMap), "trackToGenParticleMap");
+  evt.put(std::move(genConstitToGenParticleMap), "genConstitToGenParticleMap");
 }
 
 void TrackToGenParticleMapProducer::fillDescriptions(edm::ConfigurationDescriptions& descriptions) {
   edm::ParameterSetDescription desc;
-  desc.setComment("jet constitPtruent to gen particle map");
+  desc.setComment("jet constituent to gen particle map");
   desc.add<edm::InputTag>("jetSrc", edm::InputTag("slimmedJets"));
   desc.add<edm::InputTag>("genParticleSrc", edm::InputTag("packedGenParticles"));
 

@@ -25,13 +25,15 @@ process.source = cms.Source("PoolSource",
     duplicateCheckMode = cms.untracked.string("noDuplicateCheck"),
     fileNames = cms.untracked.vstring(
         # '/store/mc/RunIISummer19UL17MiniAOD/QCD_Pt_1400to1800_TuneCP5_13TeV_pythia8/MINIAODSIM/106X_mc2017_realistic_v6-v2/100000/BFAAC85A-F5C5-8843-8D2A-76A9E873E24B.root'
-        '/store/mc/RunIISummer20UL16MiniAODAPVv2/TTToSemiLeptonic_TuneCP5_13TeV-powheg-pythia8/MINIAODSIM/106X_mcRun2_asymptotic_preVFP_v11-v1/120000/0230C4F8-6445-F74C-8409-27F77DFDE107.root'
+        # '/store/mc/RunIISummer20UL16MiniAODAPVv2/TTToSemiLeptonic_TuneCP5_13TeV-powheg-pythia8/MINIAODSIM/106X_mcRun2_asymptotic_preVFP_v11-v1/120000/0230C4F8-6445-F74C-8409-27F77DFDE107.root'
+        # '/store/mc/RunIILowPUSummer20UL17MiniAODv2/TTTo2L2Nu_TuneCP5_13TeV-powheg-pythia8/MINIAODSIM/pilot_106X_mc2017_realistic_v9For2017H_v1-v2/2560000/D9746C19-3FD6-B246-95F4-E7DBD33ED768.root'
+        '/store/mc/RunIISummer20UL17MiniAODv2/TTTo2L2Nu_TuneCP5_13TeV-powheg-pythia8/MINIAODSIM/106X_mc2017_realistic_v9-v1/240000/DC372BF6-08B2-9C4A-AF9E-69E80E066E4F.root'
         ),
     )
 
 # number of events to process, set to -1 to process all events
 process.maxEvents = cms.untracked.PSet(
-    input = cms.untracked.int32(15)
+    input = cms.untracked.int32(100)
     )
 
 # To skip events with 'Found zero products matching all criteria' error
@@ -106,6 +108,7 @@ process.load("TrackingTools.TransientTrack.TransientTrackBuilder_cfi")
 ################################
 # jet reco sequence
 process.load('HeavyIonsAnalysis.JetAnalysis.ak4PFJetSequence_pponPbPb_mc_cff')
+process.tagInfoSequence = cms.Sequence()
 process.genJetSequence = cms.Sequence()
 process.recoJetSequence = cms.Sequence()
 ################################
@@ -131,8 +134,10 @@ process.forest = cms.Path(
     process.particleFlowAnalyser +
     process.hiEvtAnalyzer +
     process.HiGenParticleAna +
+    # process.updatePATJetSequence + 
+    process.tagInfoSequence +
     process.genJetSequence + 
-    process.recoJetSequence +
+    process.recoJetSequence + 
     #process.unpackedMuons +
     #process.correctedElectrons #+
     #process.ggHiNtuplizer +
@@ -140,86 +145,118 @@ process.forest = cms.Path(
     process.ak4PFJetAnalyzer # cms.EDAnalyzer("HiInclusiveJetAnalyzer")
     )
 
-#customisation
+## Customization
 
-addCandidateTagging = True
+ipTagInfoLabel_ = "pfImpactParameter"
+svTagInfoLabel_ = "pfInclusiveSecondaryVertexFinder"
+addTagInfos = True
+if addTagInfos:
+    ## Impact parameter tag infos
+    process.load("RecoBTag.ImpactParameter.pfImpactParameterTagInfos_cfi")
+    process.pfImpactParameterTagInfos.candidates  = "packedPFCandidates"
+    process.pfImpactParameterTagInfos.primaryVertex = "offlineSlimmedPrimaryVertices"
+    process.pfImpactParameterTagInfos.jets = "slimmedJets"
 
-if addCandidateTagging:
-    process.load("HeavyIonsAnalysis.JetAnalysis.candidateBtaggingMiniAOD_cff")
-    bTagPrefix_ = 'TEST'
+    ## Secondary vertex tag infos
+    process.load("RecoBTag.SecondaryVertex.pfInclusiveSecondaryVertexFinderTagInfos_cfi")
+    process.pfInclusiveSecondaryVertexFinderTagInfos.extSVCollection = "slimmedSecondaryVertices"
 
     from PhysicsTools.PatAlgos.tools.jetTools import updateJetCollection
     updateJetCollection(
         process,
         jetSource = cms.InputTag('slimmedJets'),
-        jetCorrections = ('AK4PFchs', cms.vstring(['L1FastJet', 'L2Relative', 'L3Absolute']), 'None'),
-        btagDiscriminators = ['pfCombinedSecondaryVertexV2BJetTags', 
-                              'pfDeepCSVJetTags:probb',
-                              'pfDeepCSVJetTags:probc',
-                              'pfDeepCSVJetTags:probudsg',
-                              'pfDeepCSVJetTags:probbb',
-                              'pfDeepFlavourJetTags:probb',
-                              'pfDeepFlavourJetTags:probbb',
-                              'pfDeepFlavourJetTags:problepb',
-                              'pfDeepFlavourJetTags:probc',
-                              'pfDeepFlavourJetTags:probuds',
-                              'pfDeepFlavourJetTags:probg'
-                               ], ## to add discriminators,
-        btagPrefix = bTagPrefix_,
-    )
-
+        jetCorrections = ('AK4PFchs', cms.vstring(['L1FastJet', 'L2Relative', 'L3Absolute']), 'None')
+        )
     process.updatedPatJets.addJetCorrFactors = False
-
-    ## NOT NEEDED if the btagDiscriminators are defined correctly in updateJetCollection
-    # process.updatedPatJets.addBTagInfo = True
-    # process.updatedPatJets.addDiscriminators = True
-    # process.updatedPatJets.discriminatorSources = cms.VInputTag(
-        # cms.InputTag('pfDeepCSVJetTags:probb'),
-        # cms.InputTag('pfDeepCSVJetTags:probc'),
-        # cms.InputTag('pfDeepCSVJetTags:probudsg'),
-        # cms.InputTag('pfDeepCSVJetTags:probbb'),
-        # cms.InputTag('pfDeepFlavourJetTags:probb')
-    # )
-
-    ## NEEDED for track aggregation
     process.updatedPatJets.addTagInfos = True
+    process.updatedPatJets.addBTagInfo = cms.bool(True) ## Needed to add tag infos
     process.updatedPatJets.tagInfoSources = cms.VInputTag(
-        cms.InputTag('pfImpactParameterTagInfos'),
-        cms.InputTag('pfSecondaryVertexTagInfos'),
+        cms.InputTag(ipTagInfoLabel_ + "TagInfos"),
+        cms.InputTag(svTagInfoLabel_ + "TagInfos"),
     )
-
-    # process.pfSecondaryVertexTagInfos.trackSelection.jetDeltaRMax = 0.4
-
-    process.recoJetSequence.insert(0, process.candidateBtagging*process.updatedPatJets)
-    # Note: candidateBtagging includes pfImpactParameterTagInfos
-
+    process.tagInfoSequence.insert(0, process.pfImpactParameterTagInfos *
+                                   process.pfInclusiveSecondaryVertexFinderTagInfos *
+                                   process.updatedPatJets)
     process.ak4PFJetAnalyzer.jetTag = "updatedPatJets"
-    process.ak4PFJetAnalyzer.bTagJetName = cms.untracked.string("")
-    process.ak4PFJetAnalyzer.doLegacyBtagging = cms.untracked.bool(False)
+
+process.ak4PFJetAnalyzer.doSubJetsNew = cms.untracked.bool(True)
 
 doTracks = True
 if doTracks:
     process.ak4PFJetAnalyzer.doTracks = cms.untracked.bool(True)
-    process.ak4PFJetAnalyzer.chargedOnlyTrk = cms.untracked.bool(True)
+    process.ak4PFJetAnalyzer.ipTagInfoLabel = cms.untracked.string(ipTagInfoLabel_)
     # process.ak4PFJetAnalyzer.trkPtCut = cms.untracked.double(1.)
 
 doSvtx = True
 if doSvtx:
     process.ak4PFJetAnalyzer.doSvtx = cms.untracked.bool(True)
+    process.ak4PFJetAnalyzer.svTagInfoLabel = cms.untracked.string(svTagInfoLabel_)
 
 doDeclustering = True
-doAggregation = False
-doChargedOnly = False
+doAggregation = True
+doChargedOnly = True
 if doDeclustering:
-    process.load("RecoHI.HiJetAlgos.HFdecayProductTagger_cfi")
-    process.HFdecayProductTagger.genParticles = cms.InputTag("prunedGenParticles")
-    process.HFdecayProductTagger.tagBorC = cms.bool(True) # tag B
-    process.genJetSequence.insert(0, process.HFdecayProductTagger)
+    process.load("GeneratorInterface.RivetInterface.mergedGenParticles_cfi")
+    process.genJetSequence += process.mergedGenParticles
+    ## Produces a reco::GenParticleCollection named mergedGenParticles
 
-    process.load("RecoHI.HiJetAlgos.dynGroomedGenJets_cfi")
-    process.dynGroomedGenJets.chargedOnly = cms.bool(doChargedOnly)
-    process.dynGroomedGenJets.aggregateHF = cms.bool(doAggregation)
-    process.genJetSequence.insert(1, process.dynGroomedGenJets)
+    process.load("RecoHI.HiJetAlgos.HFdecayProductTagger_cfi")
+    process.HFdecayProductTagger.genParticles = cms.InputTag("mergedGenParticles")
+    process.HFdecayProductTagger.tagBorC = cms.bool(True) # tag B
+    process.genJetSequence.insert(1, process.HFdecayProductTagger)
+    taggedGenParticlesName_ = "HFdecayProductTagger"
+    ## Produces a std::vector<pat::PackedGenParticle> named HFdecayProductTagger
+
+    process.ak4PFJetAnalyzer.genParticles = cms.untracked.InputTag(taggedGenParticlesName_)
+
+    process.bDecayAna = process.HiGenParticleAna.clone(
+        genParticleSrc = cms.InputTag(taggedGenParticlesName_),
+        useRefVector = cms.untracked.bool(False),
+        partonMEOnly = cms.untracked.bool(False),
+        chargedOnly = doChargedOnly,
+        doHI = False,
+        etaMax = cms.untracked.double(10),
+        ptMin = cms.untracked.double(0),
+        stableOnly = False
+    )
+    process.genJetSequence += process.bDecayAna
+    ## Creates the gen particle ntuple bDecayAna/hi
+
+    process.load("RecoHI.HiJetAlgos.TrackToGenParticleMapProducer_cfi")
+    process.TrackToGenParticleMapProducer.jetSrc = cms.InputTag("updatedPatJets")
+    process.TrackToGenParticleMapProducer.genParticleSrc = cms.InputTag(taggedGenParticlesName_)
+    process.genJetSequence += process.TrackToGenParticleMapProducer
+    ## Creates the genConstitToGenParticleMap and trackToGenParticleMap
+
+    process.load("RecoHI.HiJetAlgos.dynGroomedPATJets_cfi")
+    process.dynGroomedGenJets = process.dynGroomedPATJets.clone(
+        chargedOnly = cms.bool(doChargedOnly),
+        aggregateHF = cms.bool(doAggregation),
+        jetSrc = cms.InputTag("updatedPatJets"),
+        constitSrc = cms.InputTag("packedGenParticles"),
+        doGenJets = cms.bool(True),
+        candToGenParticleMap = cms.InputTag("TrackToGenParticleMapProducer", "genConstitToGenParticleMap")
+    )
+    process.genJetSequence += process.dynGroomedGenJets
+    process.ak4PFJetAnalyzer.groomedGenJets = cms.untracked.InputTag("dynGroomedGenJets")
+    ## Creates the gen jet subjets
+
+    process.dynGroomedPFJets = process.dynGroomedPATJets.clone(
+        chargedOnly = cms.bool(doChargedOnly),
+        aggregateHF = cms.bool(doAggregation),
+        jetSrc = cms.InputTag("updatedPatJets"),
+        constitSrc = cms.InputTag("packedPFCandidates"),
+        doGenJets = cms.bool(False),
+        candToGenParticleMap = cms.InputTag("TrackToGenParticleMapProducer", "trackToGenParticleMap"),
+        aggregateWithTruthInfo = cms.bool(True),
+        aggregateWithBDT = cms.bool(False),
+        model_path = cms.FileInPath("RecoHI/HiJetAlgos/data/trained_bst_30_pt_700.model")
+    )
+    process.recoJetSequence += process.dynGroomedPFJets
+    process.ak4PFJetAnalyzer.groomedJets = cms.untracked.InputTag("dynGroomedPFJets")
+    ## creates the reco subjets
+    
+
 
 #########################
 # Event Selection -> add the needed filters here
