@@ -4,6 +4,7 @@
 
 import FWCore.ParameterSet.Config as cms
 process = cms.Process('HiForest')
+process.options = cms.untracked.PSet()
 
 ###############################################################################
 
@@ -25,16 +26,25 @@ process.source = cms.Source("PoolSource",
     duplicateCheckMode = cms.untracked.string("noDuplicateCheck"),
     fileNames = cms.untracked.vstring(
         # '/store/mc/RunIISummer19UL17MiniAOD/QCD_Pt_1400to1800_TuneCP5_13TeV_pythia8/MINIAODSIM/106X_mc2017_realistic_v6-v2/100000/BFAAC85A-F5C5-8843-8D2A-76A9E873E24B.root'
+        # '/store/himc/RunIISummer20UL17pp5TeVMiniAODv2/QCD_pThat-15_bJet_TuneCP5_5p02TeV-pythia8/MINIAODSIM/106X_mc2017_realistic_forppRef5TeV_v3-v3/2530000/011A0E54-8E68-1345-AA80-1258126F75C1.root'
         # '/store/mc/RunIISummer20UL16MiniAODAPVv2/TTToSemiLeptonic_TuneCP5_13TeV-powheg-pythia8/MINIAODSIM/106X_mcRun2_asymptotic_preVFP_v11-v1/120000/0230C4F8-6445-F74C-8409-27F77DFDE107.root'
         # '/store/mc/RunIILowPUSummer20UL17MiniAODv2/TTTo2L2Nu_TuneCP5_13TeV-powheg-pythia8/MINIAODSIM/pilot_106X_mc2017_realistic_v9For2017H_v1-v2/2560000/D9746C19-3FD6-B246-95F4-E7DBD33ED768.root'
-        '/store/mc/RunIISummer20UL17MiniAODv2/TTTo2L2Nu_TuneCP5_13TeV-powheg-pythia8/MINIAODSIM/106X_mc2017_realistic_v9-v1/240000/DC372BF6-08B2-9C4A-AF9E-69E80E066E4F.root'
+        # '/store/mc/RunIISummer20UL17MiniAODv2/TTTo2L2Nu_TuneCP5_13TeV-powheg-pythia8/MINIAODSIM/106X_mc2017_realistic_v9-v1/240000/DC372BF6-08B2-9C4A-AF9E-69E80E066E4F.root'
+        '/store/mc/RunIISummer20UL17MiniAODv2/TTTo2L2Nu_TuneCP5_13TeV-powheg-pythia8/MINIAODSIM/106X_mc2017_realistic_v9-v1/240000/003621AC-81B6-444A-A43A-E5D0921C7356.root'
         ),
     )
 
+# Select specific event
+process.source.lumisToProcess = cms.untracked.VLuminosityBlockRange('1:30041')
+process.source.eventsToProcess = cms.untracked.VEventRange('1:30040011')
+
 # number of events to process, set to -1 to process all events
 process.maxEvents = cms.untracked.PSet(
-    input = cms.untracked.int32(100)
+    input = cms.untracked.int32(1000)
     )
+
+# Multi-thread 
+# process.options.numberOfThreads = cms.untracked.int32(8)
 
 # To skip events with 'Found zero products matching all criteria' error
 # process.options = cms.untracked.PSet(SkipEvent = cms.untracked.vstring('ProductNotFound'))
@@ -187,7 +197,7 @@ if doTracks:
     process.ak4PFJetAnalyzer.ipTagInfoLabel = cms.untracked.string(ipTagInfoLabel_)
     # process.ak4PFJetAnalyzer.trkPtCut = cms.untracked.double(1.)
 
-doSvtx = True
+doSvtx = False
 if doSvtx:
     process.ak4PFJetAnalyzer.doSvtx = cms.untracked.bool(True)
     process.ak4PFJetAnalyzer.svTagInfoLabel = cms.untracked.string(svTagInfoLabel_)
@@ -195,6 +205,10 @@ if doSvtx:
 doDeclustering = True
 doAggregation = True
 doChargedOnly = True
+
+tmva_variables = ["trkIp3dSig", "trkIp2dSig", "trkDistToAxis",
+                  "svtxdls", "svtxdls2d", "svtxm", "svtxmcorr",
+                  "svtxnormchi2", "svtxNtrk", "svtxTrkPtOverSv"]
 if doDeclustering:
     process.load("GeneratorInterface.RivetInterface.mergedGenParticles_cfi")
     process.genJetSequence += process.mergedGenParticles
@@ -232,6 +246,7 @@ if doDeclustering:
     process.dynGroomedGenJets = process.dynGroomedPATJets.clone(
         chargedOnly = cms.bool(doChargedOnly),
         aggregateHF = cms.bool(doAggregation),
+        # aggregateHF = cms.bool(True),
         jetSrc = cms.InputTag("updatedPatJets"),
         constitSrc = cms.InputTag("packedGenParticles"),
         doGenJets = cms.bool(True),
@@ -244,13 +259,18 @@ if doDeclustering:
     process.dynGroomedPFJets = process.dynGroomedPATJets.clone(
         chargedOnly = cms.bool(doChargedOnly),
         aggregateHF = cms.bool(doAggregation),
+        # aggregateHF = cms.bool(False),
         jetSrc = cms.InputTag("updatedPatJets"),
         constitSrc = cms.InputTag("packedPFCandidates"),
         doGenJets = cms.bool(False),
         candToGenParticleMap = cms.InputTag("TrackToGenParticleMapProducer", "trackToGenParticleMap"),
-        aggregateWithTruthInfo = cms.bool(True),
-        aggregateWithBDT = cms.bool(False),
-        model_path = cms.FileInPath("RecoHI/HiJetAlgos/data/trained_bst_30_pt_700.model")
+        aggregateWithTruthInfo = cms.bool(False),
+        aggregateWithXGB = cms.bool(True),
+        aggregateWithTMVA = cms.bool(False),
+        aggregateWithCuts = cms.bool(False),
+        xgb_path = cms.FileInPath("RecoHI/HiJetAlgos/data/sig_vs_bkg.model"),
+        tmva_path = cms.FileInPath("RecoHI/HiJetAlgos/data/TMVAClassification_BDTG.weights.xml"),
+        tmva_variables = cms.vstring(tmva_variables)
     )
     process.recoJetSequence += process.dynGroomedPFJets
     process.ak4PFJetAnalyzer.groomedJets = cms.untracked.InputTag("dynGroomedPFJets")

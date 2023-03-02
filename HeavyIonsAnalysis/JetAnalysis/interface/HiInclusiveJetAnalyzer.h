@@ -214,19 +214,27 @@ private:
     float sjt1Eta[MAXJETS] = {0};
     float sjt1Phi[MAXJETS] = {0};
     float sjt1E[MAXJETS] = {0};
+    float sjt1Y[MAXJETS] = {0};
+    float sjt1Pz[MAXJETS] = {0};
     float sjt2Pt[MAXJETS] = {0};
     float sjt2Eta[MAXJETS] = {0};
     float sjt2Phi[MAXJETS] = {0};
     float sjt2E[MAXJETS] = {0};
+    float sjt2Y[MAXJETS] = {0};
+    float sjt2Pz[MAXJETS] = {0};
 
     float rsjt1Pt[MAXJETS] = {0};
     float rsjt1Eta[MAXJETS] = {0};
     float rsjt1Phi[MAXJETS] = {0};
     float rsjt1E[MAXJETS] = {0};
+    float rsjt1Y[MAXJETS] = {0};
+    float rsjt1Pz[MAXJETS] = {0};
     float rsjt2Pt[MAXJETS] = {0};
     float rsjt2Eta[MAXJETS] = {0};
     float rsjt2Phi[MAXJETS] = {0};
     float rsjt2E[MAXJETS] = {0};
+    float rsjt2Y[MAXJETS] = {0};
+    float rsjt2Pz[MAXJETS] = {0};
 
     std::vector<std::vector<int>> jtConstituentsId = {};
     std::vector<std::vector<float>> jtConstituentsE = {};
@@ -369,6 +377,7 @@ private:
     float trkIp2dSig[MAXTRACKS]={0};
     float trkDistToAxis[MAXTRACKS]={0};
     float trkDistToAxisSig[MAXTRACKS]={0};
+    float trkDz[MAXTRACKS]={0};
     int trkPdgId[MAXTRACKS]={0};
     int trkMatchSta[MAXTRACKS]={0};
 

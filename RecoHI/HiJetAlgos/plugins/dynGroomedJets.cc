@@ -48,6 +48,7 @@
 #include "DataFormats/HepMCCandidate/interface/GenParticle.h"
 #include "DataFormats/PatCandidates/interface/PackedGenParticle.h"
 #include "AnalysisDataFormats/TrackInfo/interface/TrackToGenParticleMap.h"
+#include "CommonTools/MVAUtils/interface/TMVAEvaluator.h"
 
 #include <xgboost/c_api.h> 
 
@@ -55,7 +56,10 @@ template <class T>
 class dynGroomedJets : public edm::global::EDProducer<> {
 public:
   explicit dynGroomedJets(const edm::ParameterSet&);
-  ~dynGroomedJets() override = default;
+  // ~dynGroomedJets() override = default;
+  ~dynGroomedJets() {
+      if (aggregateHF_ && withXGB_) XGBoosterFree(*xgbTagger);
+  }
 
   static void fillDescriptions(edm::ConfigurationDescriptions&);
 
@@ -80,14 +84,16 @@ private:
   jetConstituentsPseudoHFPair aggregateHFGen(const T&, 
                                              reco::TrackToGenParticleMap) const;
   jetConstituentsPseudoHFPair aggregateHFReco(const T&, 
-                                              reco::TrackToGenParticleMap, 
-                                              BoosterHandle) const;
+                                              reco::TrackToGenParticleMap) const;
 
   // ------------- member data ----------------------------
   edm::EDGetTokenT<std::vector<T>> jetSrc_;
   edm::EDGetTokenT<std::vector<reco::PFCandidate>> constitSrc_;
   edm::EDGetTokenT<edm::View<pat::PackedCandidate>>  packedConstitSrc_;
   edm::EDGetTokenT<reco::TrackToGenParticleMap> candToGenParticleMapToken_;
+
+  std::unique_ptr<TMVAEvaluator> tmvaTagger;
+  std::unique_ptr<BoosterHandle> xgbTagger;
 
   bool writeConstits_;
   bool doLateSD_;
@@ -103,9 +109,12 @@ private:
   bool aggregateHF_;
   bool withTruthInfo_;
   bool withCuts_;
-  bool withBDT_;
-  edm::FileInPath model_path_;
-
+  bool withXGB_;
+  bool withTMVA_;
+  edm::FileInPath xgb_path_;
+  edm::FileInPath tmva_path_;
+  std::vector<std::string> tmva_variable_names_;
+  std::vector<std::string> tmva_spectator_names_;
   std::string ipTagInfoLabel_;
   std::string svTagInfoLabel_;
 };
@@ -128,25 +137,46 @@ dynGroomedJets<T>::dynGroomedJets(const edm::ParameterSet& iConfig) {
   if (aggregateHF_) {
     withTruthInfo_ = iConfig.getParameter<bool>("aggregateWithTruthInfo");
     withCuts_ = iConfig.getParameter<bool>("aggregateWithCuts");
-    withBDT_ = iConfig.getParameter<bool>("aggregateWithBDT");
+    withXGB_ = iConfig.getParameter<bool>("aggregateWithXGB");
+    withTMVA_ = iConfig.getParameter<bool>("aggregateWithTMVA");
 
-    if (withBDT_) 
-      model_path_ = iConfig.getParameter<edm::FileInPath>("model_path");
-  }
+    if (withXGB_) {
+      xgb_path_ = iConfig.getParameter<edm::FileInPath>("xgb_path");
+    }
+    if (withTMVA_) {
+      tmva_path_ = iConfig.getParameter<edm::FileInPath>("tmva_path");
+      tmva_variable_names_ = iConfig.getParameter<std::vector<std::string>>("tmva_variables");
+      tmva_spectator_names_ = iConfig.getParameter<std::vector<std::string>>("tmva_spectators");
+    }
+  } 
 
   // Get labels
   ipTagInfoLabel_ = iConfig.getParameter<std::string>("ipTagInfoLabel");
   svTagInfoLabel_ = iConfig.getParameter<std::string>("svTagInfoLabel");
   
   // Get tokens
-  // std::cout << "DEBUG: before consume" << std::endl;
   jetSrc_ = consumes<std::vector<T>>(iConfig.getParameter<edm::InputTag>("jetSrc"));
-  constitSrc_ = mayConsume<std::vector<reco::PFCandidate>>(iConfig.getParameter<edm::InputTag>("constitSrc"));
-  packedConstitSrc_ = mayConsume<edm::View<pat::PackedCandidate>>(iConfig.getParameter<edm::InputTag>("constitSrc"));
-  // std::cout << "DEBUG: constitSrc consumed" << std::endl;
+  constitSrc_ = consumes<std::vector<reco::PFCandidate>>(iConfig.getParameter<edm::InputTag>("constitSrc"));
+  packedConstitSrc_ = consumes<edm::View<pat::PackedCandidate>>(iConfig.getParameter<edm::InputTag>("constitSrc"));
 
-  if (aggregateHF_) {
-    candToGenParticleMapToken_ = mayConsume<reco::TrackToGenParticleMap>(iConfig.getParameter<edm::InputTag>("candToGenParticleMap"));
+  if (aggregateHF_) 
+    candToGenParticleMapToken_ = consumes<reco::TrackToGenParticleMap>(iConfig.getParameter<edm::InputTag>("candToGenParticleMap"));
+  // Initialize objects 
+  if (aggregateHF_ && withXGB_) {
+    xgbTagger = std::make_unique<BoosterHandle>();
+    XGBoosterCreate(NULL, 0, &(*xgbTagger));
+    auto res = XGBoosterLoadModel(*xgbTagger, xgb_path_.fullPath().c_str());    
+  }
+
+  if (aggregateHF_ && withTMVA_) {
+    tmvaTagger = std::make_unique<TMVAEvaluator>();
+    tmvaTagger->initialize("Color:Silent:Error",
+                            "BDTG",
+                            tmva_path_.fullPath(),
+                            tmva_variable_names_,
+                            tmva_spectator_names_,
+                            false,
+                            false);
   }
 
   std::string alias = (iConfig.getParameter<edm::InputTag>("jetSrc")).label();
@@ -188,12 +218,6 @@ void dynGroomedJets<T>::produce(edm::StreamID, edm::Event& iEvent, const edm::Ev
   BoosterHandle booster_;
   if (aggregateHF_) {
     iEvent.getByToken(candToGenParticleMapToken_, candToGenParticleMap);
-    if (withBDT_) {
-      // Following instructions here: https://cms-ml.github.io/documentation/inference/xgboost.html
-      XGBoosterCreate(NULL, 0, &booster_);
-      auto res = XGBoosterLoadModel(booster_, model_path_.fullPath().c_str());    
-      // std::cout << "model loaded returned " << res << std::endl;
-    }
   }
   // --------------------- //
 
@@ -227,7 +251,7 @@ void dynGroomedJets<T>::produce(edm::StreamID, edm::Event& iEvent, const edm::Ev
         // std::cout << "genjet i = " << jetIndex << " pt " << jet.pt() << " mb " << pseudoHF.mass() << std::endl;
       } else {
 		    // std::cout << "\n***Aggregating HF for reco jet" << std::endl;  
-        auto tempPair = aggregateHFReco(jet, *candToGenParticleMap, booster_);
+        auto tempPair = aggregateHFReco(jet, *candToGenParticleMap);
         jetConstituents = tempPair.first;
         pseudoHF = tempPair.second;
         // std::cout << "reco jet i = " << jetIndex << " pt " << jet.pt() << " mb " << pseudoHF.mass() << std::endl;
@@ -444,8 +468,7 @@ bool dynGroomedJets<T>::IterativeDeclustering(std::vector<fastjet::PseudoJet> je
 // Function to aggregate reconstructed tracks into pseudo-B's 
 template <class T>
 typename dynGroomedJets<T>::jetConstituentsPseudoHFPair dynGroomedJets<T>::aggregateHFReco(const T& jet, 
-                                                               reco::TrackToGenParticleMap candToGenParticleMap, 
-                                                               BoosterHandle booster_) const
+                                                               reco::TrackToGenParticleMap candToGenParticleMap) const
 {
   // std::cout << "Aggregating Bs in reco jet" << std::endl;
 
@@ -490,16 +513,34 @@ typename dynGroomedJets<T>::jetConstituentsPseudoHFPair dynGroomedJets<T>::aggre
       const double missing_value = -1000000.;
 
       float ip3dSig = missing_value;
+      float ip2dSig = missing_value;
+      float distanceToJetAxis = missing_value;
+      bool isLepton = false;
       bool inSV = false;
+
       float svtxdls = missing_value;
+      float svtxdls2d = missing_value;
       float svtxm = missing_value;
+      float svtxmcorr = missing_value;
+      float svtxNtrk = missing_value;
+      float svtxnormchi2 = missing_value;
+      float svtxTrkPtOverSv = missing_value;
+
+      float jtpt = jet.pt();
 
       // Get IP info 
       int trkIPIndex = itIPTrack - ipTracks.begin();
       const reco::btag::TrackIPData trkIPdata = ipData[trkIPIndex];
       ip3dSig = trkIPdata.ip3d.significance();
+      ip2dSig = trkIPdata.ip2d.significance();
+      distanceToJetAxis = trkIPdata.distanceToJetAxis.value();
+      int pdg = constit->pdgId();
+      isLepton = (std::abs(pdg) == 11) || (std::abs(pdg) == 13);
+
       // if nan go back to missing_value
       if (ip3dSig != ip3dSig) ip3dSig = missing_value;
+      if (ip2dSig != ip2dSig) ip2dSig = missing_value;
+      if (distanceToJetAxis != distanceToJetAxis) distanceToJetAxis = missing_value;
          
       // Get SV info
       for (uint ivtx = 0; ivtx < svTagInfo->nVertices(); ivtx++) {
@@ -508,51 +549,109 @@ typename dynGroomedJets<T>::jetConstituentsPseudoHFPair dynGroomedJets<T>::aggre
         if (itSVTrack == isvTracks.end()) continue;
 
         inSV = true;
+
+        svtxNtrk = (float) svTagInfo->nVertexTracks(ivtx);
         
-        Measurement1D m1D = svTagInfo->flightDistance(ivtx);
+        Measurement1D m1D = svTagInfo->flightDistance(ivtx, 0);
         svtxdls = m1D.significance();
 
-        Measurement1D m2D = svTagInfo->flightDistance(ivtx, true);
+        Measurement1D m2D = svTagInfo->flightDistance(ivtx, 2);
+        svtxdls2d = m2D.significance();
         
         const reco::VertexCompositePtrCandidate svtx = svTagInfo->secondaryVertex(ivtx);
         svtxm = svtx.p4().mass();
+
+        double svtxpt = svtx.p4().pt();
+        svtxTrkPtOverSv = constit->pt() / svtxpt;
+
+        //mCorr=srqt(m^2+p^2sin^2(th)) + p*sin(th)
+        double sinth = svtx.p4().Vect().Unit().Cross((svTagInfo->flightDirection(ivtx)).unit()).Mag2();
+        sinth = sqrt(sinth);
+        double underRoot = std::pow(svtxm, 2) + (std::pow(svtxpt, 2) * std::pow(sinth, 2));
+        svtxmcorr = std::sqrt(underRoot) + (svtxpt * sinth);
+
+        svtxnormchi2 = svtx.vertexNormalizedChi2();
+        svtxTrkPtOverSv = constit->pt() / svtxpt;
 
         break;
       } // end vtx loop
 
       if (withCuts_) {
-        if (inSV || (ip3dSig > 3.)) {
+        if (inSV || (ip3dSig > 2.5)) {
           status = 100;
         } 
-      } else if (withBDT_) {
+      } else if (withXGB_) {
+        // std::cout << "Aggregating with XGB" << std::endl;
         float inSVBDT = (inSV) ? 1. : 0.;
+        float isLeptonBDT = (isLepton) ? 1. : 0.;
 
         // Initialize BDT related variables
-        bst_ulong out_len = 0; // bst_ulong is a typedef of unsigned long
-        const float *f; // array to store predictions
         float threshold = 0.44;
 
+        bst_ulong out_len = 0; // bst_ulong is a typedef of unsigned long
+        const float *f; // array to store predictions
+        
         DMatrixHandle data_;
-        const int nFeatures = 4;
+        const int nFeatures = 13;
         const int nEntries = 1;
-        float trackDataBDT[nEntries][nFeatures] = {{inSVBDT, svtxdls, svtxm, ip3dSig}};
+        // if (svtxdls>0) {}
+        // if (svtxdls2d>0) {}
+        // if (svtxm>0) {}
+        // if (svtxmcorr>0) {}
+        // if (svtxNtrk>0) {}
+        // if (svtxnormchi2>0) {}
+        // if (svtxTrkPtOverSv>0) {}
+        float trackDataBDT[nEntries][nFeatures] = {{ip3dSig, ip2dSig, distanceToJetAxis,
+                                                    isLeptonBDT, inSVBDT,
+                                                    svtxdls, svtxdls2d, svtxm, svtxmcorr,
+                                                    svtxNtrk, svtxnormchi2, svtxTrkPtOverSv,
+                                                    jtpt}};
+        // std::cout << "New track" << std::endl;
+        // for (auto var : trackDataBDT[0]) {
+        //   std::cout << var << std::endl;
+        // }
         
         XGDMatrixCreateFromMat((float *)trackDataBDT, nEntries, nFeatures, missing_value, &data_);
-        XGBoosterPredict(booster_, data_, 0, 0, &out_len, &f);
+        XGBoosterPredict(*xgbTagger, data_, 0, 0, &out_len, &f);
         float prediction = f[0];
+        // float prediction = 0.5;
         // std::cout << "trk with pt " << constit->pt()
         //           << ", ip3dsig " << ip3dSig
         //           << ", in SV " << inSVBDT
         //           << ", svtxm " << svtxm
         //           << ", svtxdls " << svtxdls
-        //           << ", model prediction " << prediction 
-        //           << std::endl;
+                  // << ", model prediction " << prediction 
+                  // << std::endl;
 
         if (prediction > threshold) {
           status = 100;
         }
-      }
-    }
+      } else if (withTMVA_) {
+        // [TODO]: create a map of all possible variables and 
+        // then make the input only include the variables from 
+        // tmva_variable_names_
+        std::map<std::string, float> inputs;
+        inputs["trkIp3dSig"] = ip3dSig;
+        inputs["trkIp2dSig"] = ip2dSig;
+        inputs["trkDistToAxis"] = distanceToJetAxis;
+        inputs["svtxdls"] = svtxdls;
+        inputs["svtxdls2d"] = svtxdls2d;
+        inputs["svtxm"] = svtxm;
+        inputs["svtxmcorr"] = svtxmcorr;
+        inputs["svtxnormchi2"] = svtxnormchi2;
+        inputs["svtxNtrk"] = svtxNtrk;
+        inputs["svtxTrkPtOverSv"] = svtxTrkPtOverSv;
+
+        float prediction = -99.;
+
+        prediction = tmvaTagger->evaluate(inputs);
+        // std::cout << "prediction: " << prediction << std::endl;
+
+        if (prediction > 0.) {
+          status = 100;
+        }
+      } // endif 
+    } // endif *not* with truth info
 
     // Add particle to output collection or from HF map
     if (status == 1) {
@@ -671,9 +770,12 @@ void dynGroomedJets<T>::fillDescriptions(edm::ConfigurationDescriptions& descrip
   desc.add<bool>("aggregateHF", false);
   desc.add<bool>("aggregateWithTruthInfo", true);
   desc.add<bool>("aggregateWithCuts", false);
-  desc.add<bool>("aggregateWithBDT", false);
-  desc.add<edm::FileInPath>("model_path", edm::FileInPath("RecoHI/HiJetAlgos/data/dummy.model"));
-
+  desc.add<bool>("aggregateWithXGB", false);
+  desc.add<bool>("aggregateWithTMVA", false);
+  desc.add<edm::FileInPath>("xgb_path", edm::FileInPath("RecoHI/HiJetAlgos/data/dummy.model"));
+  desc.add<edm::FileInPath>("tmva_path", edm::FileInPath("RecoHI/HiJetAlgos/data/dummy.weights.xml"));
+  desc.add<std::vector<std::string>>("tmva_variables", {});
+  desc.add<std::vector<std::string>>("tmva_spectators", {});
   // Tag info labels
   desc.add<std::string>("ipTagInfoLabel", "pfImpactParameter");
   desc.add<std::string>("svTagInfoLabel", "pfInclusiveSecondaryVertexFinder");

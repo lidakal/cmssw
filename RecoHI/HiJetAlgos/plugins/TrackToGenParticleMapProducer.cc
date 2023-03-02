@@ -76,6 +76,9 @@ private:
   double maxDR2_;
   double minRelPt_;
   double maxRelPt_;
+
+  // Private functions
+  GenTypePtr findMatch(TrackTypePtr, edm::Handle<std::vector<GenType>>) const;
 };
 
 TrackToGenParticleMapProducer::TrackToGenParticleMapProducer(const edm::ParameterSet& cfg) {
@@ -116,28 +119,10 @@ void TrackToGenParticleMapProducer::produce(edm::StreamID, edm::Event &evt, cons
       if (constitPtr->charge() == 0) continue;
 
       // Look for match in charged gen particles 
-      double minDR2 = std::numeric_limits<double>::max();
-      GenTypePtr matchGenParticle;
-
-      for (size_t igen = 0; igen < (*genParticles).size(); igen++) {
-        edm::Ref<std::vector<GenType>> genParticleRef_(genParticles, int(igen));
-        GenTypePtr genParticlePtr = edm::refToPtr(genParticleRef_);
-        if (genParticlePtr->charge() == 0) continue;
-
-        double DR2 = reco::deltaR2(*constitPtr, *genParticlePtr);
-        if (DR2 > maxDR2_) continue;
-
-        double relPt = constitPtr->pt() / genParticlePtr->pt();
-        if (relPt < minRelPt_ || relPt > maxRelPt_) continue;
-
-        if (DR2 < minDR2) {
-          minDR2 = DR2;
-          matchGenParticle = genParticlePtr;
-        }
-      } // end gen particle loop
-    if (matchGenParticle.isNonnull()) 
-      trackToGenParticleMap->insert(std::pair<TrackTypePtr, GenTypePtr>(constitPtr, matchGenParticle));
-    }
+      GenTypePtr matchGenParticle = findMatch(constitPtr, genParticles);
+      if (matchGenParticle.isNonnull()) 
+        trackToGenParticleMap->insert(std::pair<TrackTypePtr, GenTypePtr>(constitPtr, matchGenParticle));
+    } // end reco jet constituents loop
 
     // grab the gen jet
     const GenJetType *genJet = jet.genJet();
@@ -147,32 +132,39 @@ void TrackToGenParticleMapProducer::produce(edm::StreamID, edm::Event &evt, cons
     for (const TrackTypePtr constitPtr : genJet->getJetConstituents()) {
       if (constitPtr->charge() == 0) continue;
 
-      // Look for match in charged gen particles 
-      double minDR2 = std::numeric_limits<double>::max();
-      GenTypePtr matchGenParticle;
-
-      for (size_t igen = 0; igen < (*genParticles).size(); igen++) {
-        edm::Ref<std::vector<GenType>> genParticleRef_(genParticles, int(igen));
-        GenTypePtr genParticlePtr = edm::refToPtr(genParticleRef_);
-        if (genParticlePtr->charge() == 0) continue;
-
-        double DR2 = reco::deltaR2(*constitPtr, *genParticlePtr);
-        if (DR2 > maxDR2_) continue;
-
-        double relPt = constitPtr->pt() / genParticlePtr->pt();
-        if (relPt < minRelPt_ || relPt > maxRelPt_) continue;
-
-        if (DR2 < minDR2) {
-          minDR2 = DR2;
-          matchGenParticle = genParticlePtr;
-        }
-      } // end gen particle loop
-    if (matchGenParticle.isNonnull()) 
-      genConstitToGenParticleMap->insert(std::pair<TrackTypePtr, GenTypePtr>(constitPtr, matchGenParticle));
-    }
-  }
+      GenTypePtr matchGenParticle = findMatch(constitPtr, genParticles);
+      if (matchGenParticle.isNonnull()) 
+        genConstitToGenParticleMap->insert(std::pair<TrackTypePtr, GenTypePtr>(constitPtr, matchGenParticle));
+    } // end gen jet constituents loop
+  } // end jet loop
   evt.put(std::move(trackToGenParticleMap), "trackToGenParticleMap");
   evt.put(std::move(genConstitToGenParticleMap), "genConstitToGenParticleMap");
+}
+
+TrackToGenParticleMapProducer::GenTypePtr 
+  TrackToGenParticleMapProducer::findMatch(TrackTypePtr cand, 
+                                           edm::Handle<std::vector<GenType>> genParticles) const {
+  double minDR2 = std::numeric_limits<double>::max();
+  GenTypePtr matchGenParticle;
+
+  for (size_t igen = 0; igen < (*genParticles).size(); igen++) {
+    edm::Ref<std::vector<GenType>> genParticleRef_(genParticles, int(igen));
+    GenTypePtr genParticlePtr = edm::refToPtr(genParticleRef_);
+    if (genParticlePtr->charge() == 0) continue;
+
+    double DR2 = reco::deltaR2(*cand, *genParticlePtr);
+    if (DR2 > maxDR2_) continue;
+
+    double relPt = cand->pt() / genParticlePtr->pt();
+    if (relPt < minRelPt_ || relPt > maxRelPt_) continue;
+
+    if (DR2 < minDR2) {
+      minDR2 = DR2;
+      matchGenParticle = genParticlePtr;
+    }
+  } // end gen particle loop
+
+  return matchGenParticle;
 }
 
 void TrackToGenParticleMapProducer::fillDescriptions(edm::ConfigurationDescriptions& descriptions) {
