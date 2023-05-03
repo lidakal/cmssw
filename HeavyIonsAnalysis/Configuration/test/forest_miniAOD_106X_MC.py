@@ -26,17 +26,18 @@ process.source = cms.Source("PoolSource",
     duplicateCheckMode = cms.untracked.string("noDuplicateCheck"),
     fileNames = cms.untracked.vstring(
         # '/store/mc/RunIISummer19UL17MiniAOD/QCD_Pt_1400to1800_TuneCP5_13TeV_pythia8/MINIAODSIM/106X_mc2017_realistic_v6-v2/100000/BFAAC85A-F5C5-8843-8D2A-76A9E873E24B.root'
-        # '/store/himc/RunIISummer20UL17pp5TeVMiniAODv2/QCD_pThat-15_bJet_TuneCP5_5p02TeV-pythia8/MINIAODSIM/106X_mc2017_realistic_forppRef5TeV_v3-v3/2530000/011A0E54-8E68-1345-AA80-1258126F75C1.root'
+        '/store/himc/RunIISummer20UL17pp5TeVMiniAODv2/QCD_pThat-15_bJet_TuneCP5_5p02TeV-pythia8/MINIAODSIM/106X_mc2017_realistic_forppRef5TeV_v3-v3/2530000/071C3B54-D788-DB4A-8FDD-FBCE0A911D55.root'
+        # '/store/himc/RunIISummer20UL17pp5TeVMiniAODv2/QCD_pThat-15_Dijet_TuneCP5_5p02TeV-pythia8/MINIAODSIM/106X_mc2017_realistic_forppRef5TeV_v3-v3/40000/033410AD-0EDE-874A-9E52-9AFCD7F3694C.root'
         # '/store/mc/RunIISummer20UL16MiniAODAPVv2/TTToSemiLeptonic_TuneCP5_13TeV-powheg-pythia8/MINIAODSIM/106X_mcRun2_asymptotic_preVFP_v11-v1/120000/0230C4F8-6445-F74C-8409-27F77DFDE107.root'
         # '/store/mc/RunIILowPUSummer20UL17MiniAODv2/TTTo2L2Nu_TuneCP5_13TeV-powheg-pythia8/MINIAODSIM/pilot_106X_mc2017_realistic_v9For2017H_v1-v2/2560000/D9746C19-3FD6-B246-95F4-E7DBD33ED768.root'
         # '/store/mc/RunIISummer20UL17MiniAODv2/TTTo2L2Nu_TuneCP5_13TeV-powheg-pythia8/MINIAODSIM/106X_mc2017_realistic_v9-v1/240000/DC372BF6-08B2-9C4A-AF9E-69E80E066E4F.root'
-        '/store/mc/RunIISummer20UL17MiniAODv2/TTTo2L2Nu_TuneCP5_13TeV-powheg-pythia8/MINIAODSIM/106X_mc2017_realistic_v9-v1/240000/003621AC-81B6-444A-A43A-E5D0921C7356.root'
+        # '/store/mc/RunIISummer20UL17MiniAODv2/TTTo2L2Nu_TuneCP5_13TeV-powheg-pythia8/MINIAODSIM/106X_mc2017_realistic_v9-v1/240000/003621AC-81B6-444A-A43A-E5D0921C7356.root'
         ),
     )
 
 # Select specific event
-process.source.lumisToProcess = cms.untracked.VLuminosityBlockRange('1:30041')
-process.source.eventsToProcess = cms.untracked.VEventRange('1:30040011')
+# process.source.lumisToProcess = cms.untracked.VLuminosityBlockRange('1:30041')
+# process.source.eventsToProcess = cms.untracked.VEventRange('1:30040011')
 
 # number of events to process, set to -1 to process all events
 process.maxEvents = cms.untracked.PSet(
@@ -189,6 +190,19 @@ if addTagInfos:
                                    process.updatedPatJets)
     process.ak4PFJetAnalyzer.jetTag = "updatedPatJets"
 
+    ## Number of b and c hadrons
+    from PhysicsTools.JetMCAlgos.HadronAndPartonSelector_cfi import selectedHadronsAndPartons
+    process.selectedHadronsAndPartons = selectedHadronsAndPartons.clone(
+        particles = cms.InputTag("mergedGenParticles")
+        )   
+    from PhysicsTools.JetMCAlgos.AK4PFJetsMCFlavourInfos_cfi import ak4JetFlavourInfos
+    process.jetFlavourInfosAK4PFJets = ak4JetFlavourInfos.clone(
+        jets = cms.InputTag("slimmedJets")
+    )
+
+    process.recoJetSequence += (process.selectedHadronsAndPartons * process.jetFlavourInfosAK4PFJets)
+    process.ak4PFJetAnalyzer.jetFlavourInfos = cms.InputTag("jetFlavourInfosAK4PFJets")
+
 process.ak4PFJetAnalyzer.doSubJetsNew = cms.untracked.bool(True)
 
 doTracks = True
@@ -197,7 +211,7 @@ if doTracks:
     process.ak4PFJetAnalyzer.ipTagInfoLabel = cms.untracked.string(ipTagInfoLabel_)
     # process.ak4PFJetAnalyzer.trkPtCut = cms.untracked.double(1.)
 
-doSvtx = False
+doSvtx = True
 if doSvtx:
     process.ak4PFJetAnalyzer.doSvtx = cms.untracked.bool(True)
     process.ak4PFJetAnalyzer.svTagInfoLabel = cms.untracked.string(svTagInfoLabel_)
@@ -205,10 +219,12 @@ if doSvtx:
 doDeclustering = True
 doAggregation = True
 doChargedOnly = True
+doLatekt_ = True
 
 tmva_variables = ["trkIp3dSig", "trkIp2dSig", "trkDistToAxis",
                   "svtxdls", "svtxdls2d", "svtxm", "svtxmcorr",
-                  "svtxnormchi2", "svtxNtrk", "svtxTrkPtOverSv"]
+                  "svtxnormchi2", "svtxNtrk", "svtxTrkPtOverSv",
+                  "jtpt"]
 if doDeclustering:
     process.load("GeneratorInterface.RivetInterface.mergedGenParticles_cfi")
     process.genJetSequence += process.mergedGenParticles
@@ -217,7 +233,7 @@ if doDeclustering:
     process.load("RecoHI.HiJetAlgos.HFdecayProductTagger_cfi")
     process.HFdecayProductTagger.genParticles = cms.InputTag("mergedGenParticles")
     process.HFdecayProductTagger.tagBorC = cms.bool(True) # tag B
-    process.genJetSequence.insert(1, process.HFdecayProductTagger)
+    process.genJetSequence += process.HFdecayProductTagger
     taggedGenParticlesName_ = "HFdecayProductTagger"
     ## Produces a std::vector<pat::PackedGenParticle> named HFdecayProductTagger
 
@@ -245,12 +261,13 @@ if doDeclustering:
     process.load("RecoHI.HiJetAlgos.dynGroomedPATJets_cfi")
     process.dynGroomedGenJets = process.dynGroomedPATJets.clone(
         chargedOnly = cms.bool(doChargedOnly),
-        aggregateHF = cms.bool(doAggregation),
-        # aggregateHF = cms.bool(True),
+        # aggregateHF = cms.bool(doAggregation),
+        aggregateHF = cms.bool(True),
         jetSrc = cms.InputTag("updatedPatJets"),
         constitSrc = cms.InputTag("packedGenParticles"),
         doGenJets = cms.bool(True),
-        candToGenParticleMap = cms.InputTag("TrackToGenParticleMapProducer", "genConstitToGenParticleMap")
+        candToGenParticleMap = cms.InputTag("TrackToGenParticleMapProducer", "genConstitToGenParticleMap"),
+        doLateKt = doLatekt_
     )
     process.genJetSequence += process.dynGroomedGenJets
     process.ak4PFJetAnalyzer.groomedGenJets = cms.untracked.InputTag("dynGroomedGenJets")
@@ -258,19 +275,20 @@ if doDeclustering:
 
     process.dynGroomedPFJets = process.dynGroomedPATJets.clone(
         chargedOnly = cms.bool(doChargedOnly),
-        aggregateHF = cms.bool(doAggregation),
-        # aggregateHF = cms.bool(False),
+        # aggregateHF = cms.bool(doAggregation),
+        aggregateHF = cms.bool(False),
         jetSrc = cms.InputTag("updatedPatJets"),
         constitSrc = cms.InputTag("packedPFCandidates"),
         doGenJets = cms.bool(False),
         candToGenParticleMap = cms.InputTag("TrackToGenParticleMapProducer", "trackToGenParticleMap"),
         aggregateWithTruthInfo = cms.bool(False),
-        aggregateWithXGB = cms.bool(True),
-        aggregateWithTMVA = cms.bool(False),
+        aggregateWithXGB = cms.bool(False),
+        aggregateWithTMVA = cms.bool(True),
         aggregateWithCuts = cms.bool(False),
         xgb_path = cms.FileInPath("RecoHI/HiJetAlgos/data/sig_vs_bkg.model"),
         tmva_path = cms.FileInPath("RecoHI/HiJetAlgos/data/TMVAClassification_BDTG.weights.xml"),
-        tmva_variables = cms.vstring(tmva_variables)
+        tmva_variables = cms.vstring(tmva_variables),
+        doLateKt = doLatekt_
     )
     process.recoJetSequence += process.dynGroomedPFJets
     process.ak4PFJetAnalyzer.groomedJets = cms.untracked.InputTag("dynGroomedPFJets")
