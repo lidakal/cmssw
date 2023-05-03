@@ -136,6 +136,27 @@ void TrackToGenParticleMapProducer::produce(edm::StreamID, edm::Event &evt, cons
       if (matchGenParticle.isNonnull()) 
         genConstitToGenParticleMap->insert(std::pair<TrackTypePtr, GenTypePtr>(constitPtr, matchGenParticle));
     } // end gen jet constituents loop
+
+    // [TEST]: Go over the SV tracks 
+    std::string svTagInfoLabel_ = "pfInclusiveSecondaryVertexFinder";
+    const reco::CandSecondaryVertexTagInfo *svTagInfo = jet.tagInfoCandSecondaryVertex(svTagInfoLabel_.c_str());
+    int nsv = svTagInfo->nVertices();
+    for (int isv = 0; isv < nsv; isv++) {
+      const std::vector<reco::CandidatePtr> svTracks = svTagInfo->vertexTracks(isv);
+      for (auto svTrkPtr : svTracks) {
+        if (svTrkPtr->charge() == 0) continue;
+
+        // Look if the particle is already in the map
+        if (trackToGenParticleMap->find(svTrkPtr) != trackToGenParticleMap->end()) {
+          continue;
+        }
+
+        // If not, look for match in charged gen particles 
+        GenTypePtr matchGenParticle = findMatch(svTrkPtr, genParticles);
+        if (matchGenParticle.isNonnull()) 
+          trackToGenParticleMap->insert(std::pair<TrackTypePtr, GenTypePtr>(svTrkPtr, matchGenParticle));
+      } // end sv trk loop
+    } // end sv loop
   } // end jet loop
   evt.put(std::move(trackToGenParticleMap), "trackToGenParticleMap");
   evt.put(std::move(genConstitToGenParticleMap), "genConstitToGenParticleMap");

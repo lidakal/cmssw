@@ -25,6 +25,9 @@
 #include "fastjet/contrib/Njettiness.hh"
 #include "AnalysisDataFormats/TrackInfo/interface/TrackToGenParticleMap.h"
 #include "DataFormats/PatCandidates/interface/PackedGenParticle.h"
+
+#include "SimDataFormats/JetMatching/interface/JetFlavourInfo.h"
+#include "SimDataFormats/JetMatching/interface/JetFlavourInfoMatching.h"
 //
 
 /**\class HiInclusiveJetAnalyzer
@@ -95,6 +98,9 @@ private:
   edm::EDGetTokenT<edm::View<pat::PackedCandidate>> pseudoHFGenToken_;
 
   edm::EDGetTokenT<reco::TrackToGenParticleMap> trackToGenParticleMapToken_;
+
+  // b and c hadrons
+  edm::EDGetTokenT<reco::JetFlavourInfoMatchingCollection> jetFlavourInfosToken_;
 
   // [DEBUG]
   edm::EDGetTokenT<std::vector<reco::Vertex>> primaryVerticesToken_;
@@ -169,11 +175,21 @@ private:
     float jtphi[MAXJETS]={0};
 
     // jet true flavour tagging
+    int jtParFlav[MAXJETS]={0};
     int jtHadFlav[MAXJETS]={0};
+    int jtNbHad[MAXJETS]={0};
+    int jtNcHad[MAXJETS]={0};
+    int jtNbPar[MAXJETS]={0};
+    int jtNcPar[MAXJETS]={0};
 
     // jet aggregated pseudo-B mass
     float jtmB[MAXJETS]={0};
+    float jtBpt[MAXJETS]={0};
+    float jtptCh[MAXJETS]={0};
     float refmB[MAXJETS]={0};
+    float refBpt[MAXJETS]={0};
+    float refptCh[MAXJETS]={0};
+    int refNtrk[MAXJETS]={0};
 
     //reWTA reclusted jet axis
     float WTAeta[MAXJETS]={0};
@@ -363,6 +379,15 @@ private:
     float svtxTrkSumChi2[MAXSVTX]={0};
     int svtxTrkNetCharge[MAXSVTX]={0};
     int svtxNtrkInCone[MAXSVTX]={0};
+
+    int ntrkInSvtxNotInJet=0; 
+    int trkInSvtxNotInJetSvId[MAXTRACKS]={0};
+    int trkInSvtxNotInJetOtherJetId[MAXTRACKS]={0};
+    int trkInSvtxNotInJetMatchSta[MAXTRACKS]={0};
+    float trkInSvtxNotInJetPt[MAXTRACKS]={0};
+    float trkInSvtxNotInJetEta[MAXTRACKS]={0};
+    float trkInSvtxNotInJetPhi[MAXTRACKS]={0};
+
 
     int ntrk=0;
     int jtNtrk[MAXJETS]={0};

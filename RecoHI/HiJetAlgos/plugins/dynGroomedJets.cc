@@ -96,13 +96,14 @@ private:
   std::unique_ptr<BoosterHandle> xgbTagger;
 
   bool writeConstits_;
-  bool doLateSD_;
+  bool doLateKt_;
   bool chargedOnly_;
   bool doGenJets_;
   
   double zcut_;
   double beta_;
   double dynktcut_;
+  double ktcut_;
   double rParam_;
   double ptCut_;
 
@@ -123,7 +124,7 @@ template <class T>
 dynGroomedJets<T>::dynGroomedJets(const edm::ParameterSet& iConfig) {
   // Get configuration parameters
   writeConstits_ = iConfig.getParameter<bool>("writeConstits");
-  doLateSD_ = iConfig.getParameter<bool>("doLateSD");
+  doLateKt_ = iConfig.getParameter<bool>("doLateKt");
   chargedOnly_ = iConfig.getParameter<bool>("chargedOnly");
   aggregateHF_ = iConfig.getParameter<bool>("aggregateHF"); 
   doGenJets_ = iConfig.getParameter<bool>("doGenJets");
@@ -132,6 +133,7 @@ dynGroomedJets<T>::dynGroomedJets(const edm::ParameterSet& iConfig) {
   zcut_ = iConfig.getParameter<double>("zcut");
   beta_ = iConfig.getParameter<double>("beta");
   dynktcut_ = iConfig.getParameter<double>("dynktcut");
+  ktcut_ = iConfig.getParameter<double>("ktcut");
   rParam_ = iConfig.getParameter<double>("rParam");
 
   if (aggregateHF_) {
@@ -404,6 +406,7 @@ bool dynGroomedJets<T>::IterativeDeclustering(std::vector<fastjet::PseudoJet> je
    
   // Iterative declustering for any type of jet
   // given its constituents
+  // returns true/false about whether the selected split is the hardest
 
   bool flagSubjet=false;
   bool isHardest=false;
@@ -438,7 +441,10 @@ bool dynGroomedJets<T>::IterativeDeclustering(std::vector<fastjet::PseudoJet> je
         double delta_R = j1.delta_R(j2);
         double cut = zcut_ * pow(delta_R / rParam_, beta_);
         double z = j2.perp() / (j1.perp() + j2.perp());
-        if (z > cut && (doLateSD_ || !flagSubjet) ) {
+        double kt = j2.perp() * delta_R;
+        bool passCut = (z > cut);
+        if (doLateKt_) passCut = (kt > ktcut_);
+        if (passCut && (doLateKt_ || !flagSubjet) ) {
           flagSubjet = true;
           j1first = j1;
           j2first = j2;
@@ -641,13 +647,14 @@ typename dynGroomedJets<T>::jetConstituentsPseudoHFPair dynGroomedJets<T>::aggre
         inputs["svtxnormchi2"] = svtxnormchi2;
         inputs["svtxNtrk"] = svtxNtrk;
         inputs["svtxTrkPtOverSv"] = svtxTrkPtOverSv;
+        inputs["jtpt"] = jtpt;
 
         float prediction = -99.;
 
         prediction = tmvaTagger->evaluate(inputs);
         // std::cout << "prediction: " << prediction << std::endl;
 
-        if (prediction > 0.) {
+        if (prediction > -0.3) {
           status = 100;
         }
       } // endif 
@@ -756,12 +763,13 @@ void dynGroomedJets<T>::fillDescriptions(edm::ConfigurationDescriptions& descrip
 
   // Configuration parameters
   desc.add<bool>("writeConstits", false);
-  desc.add<bool>("doLateSD", false);
+  desc.add<bool>("doLateKt", false);
   desc.add<bool>("chargedOnly", false);
   
   desc.add<double>("zcut", 0.1);
   desc.add<double>("beta", 0.0);
   desc.add<double>("dynktcut", 1.0);
+  desc.add<double>("ktcut", 1.0);
   desc.add<double>("rParam", 0.4);
   desc.add<double>("ptCut", 1.);
 
