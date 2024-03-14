@@ -25,13 +25,23 @@ process.HiForestInfo.info = cms.vstring("HiForest, miniAOD, 106X, data")
 process.source = cms.Source("PoolSource",
     duplicateCheckMode = cms.untracked.string("noDuplicateCheck"),
     fileNames = cms.untracked.vstring(
-        '/store/data/Run2017G/LowEGJet/MINIAOD/UL2017_MiniAODv2-v2/2810000/01869167-7867-434D-A952-5BEC77B73ABA.root'
+        # '/store/data/Run2017G/LowEGJet/MINIAOD/UL2017_MiniAODv2-v2/2810000/01869167-7867-434D-A952-5BEC77B73ABA.root'
+        # '/store/data/Run2017G/HighEGJet/MINIAOD/UL2017_MiniAODv2-v2/2530000/0128C28F-AFE6-8F42-B9E2-F3D58AA96AAC.root'
+        # '/store/data/Run2017G/SingleMuonTnP/MINIAOD/09Aug2019_UL2017-v1/10000/031B3B58-47D5-4F43-907D-E95BC492311C.root'
+        # '/store/data/Run2017G/SingleMuon/MINIAOD/UL2017_MiniAODv2-v1/30000/8A5CEA04-5852-CE47-AAF7-8C0B33A70FD3.root'
+        # '/store/data/Run2017G/HighEGJet/MINIAOD/UL2017_MiniAODv2-v2/50000/2ECDBCF3-B35E-D24F-864B-62AAF9367181.root'
+        'file:/data_CMS/cms/kalipoliti/HighEGJet/hardToOpenFile/2ECDBCF3-B35E-D24F-864B-62AAF9367181.root'
         ),
     )
 
 
 # Select specific event
-# process.source.lumisToProcess = cms.untracked.VLuminosityBlockRange('1:7897')
+lostLumis = cms.untracked.VLuminosityBlockRange('306705:1062', '306705:1091', 
+                                                '306705:1101', '306705:1102',
+                                                '306777:1957', '306777:1961',
+                                                '306777:1965', '306777:1966',
+                                                '306777:1970', '306777:1971')
+process.source.lumisToProcess = lostLumis
 # process.source.eventsToProcess = cms.untracked.VEventRange('1:110394257')
 
 # number of events to process, set to -1 to process all events
@@ -60,6 +70,13 @@ process.GlobalTag = GlobalTag(process.GlobalTag, '106X_dataRun2_v35', '')
 process.HiForestInfo.GlobalTagLabel = process.GlobalTag.globaltag
 process.GlobalTag.snapshotTime = cms.string("9999-12-31 23:59:59.000")
 
+process.GlobalTag.toGet.extend([
+    cms.PSet(record = cms.string("BTagTrackProbability3DRcd"),
+             tag = cms.string("JPcalib_Data94X_2017pp_v2"),
+             connect = cms.string("frontier://FrontierProd/CMS_CONDITIONS")
+
+         )
+      ])
 
 ###############################################################################
 
@@ -119,6 +136,15 @@ process.load("HeavyIonsAnalysis.MuonAnalysis.unpackedMuons_cfi")
 process.load("HeavyIonsAnalysis.MuonAnalysis.muonAnalyzer_cfi")
 process.muonAnalyzer.doGen = cms.bool(True)
 
+#################################
+# rho
+process.load("RecoJets.JetProducers.fixedGridRhoProducerFastjet_cfi")
+process.fixedGridRhoFastjetAll.pfCandidatesTag = cms.InputTag("packedPFCandidates")
+process.rhoSequence = cms.Sequence(
+    process.fixedGridRhoFastjetAll
+)
+process.akCs4PFJetAnalyzer.rhoSrc = cms.InputTag("fixedGridRhoFastjetAll")
+
 ###############################################################################
 
 ###############################################################################
@@ -138,6 +164,7 @@ process.forest = cms.Path(
     #process.correctedElectrons #+
     #process.ggHiNtuplizer +
     #process.muonAnalyzer + 
+    process.rhoSequence +
     process.akCs4PFJetAnalyzer # cms.EDAnalyzer("HiInclusiveJetAnalyzer")
     )
 
@@ -157,6 +184,9 @@ if addTagInfos:
     process.load("RecoBTag.SecondaryVertex.pfInclusiveSecondaryVertexFinderTagInfos_cfi")
     process.pfInclusiveSecondaryVertexFinderTagInfos.extSVCollection = "slimmedSecondaryVertices"
 
+    # Rerun JetProbability
+    process.load("RecoBTag.ImpactParameter.pfJetProbabilityBJetTags_cfi")
+
     _btagDiscriminators = cms.PSet(
         names = cms.vstring(
             'pfDeepFlavourJetTags:probb',
@@ -168,9 +198,11 @@ if addTagInfos:
     updateJetCollection(
         process,
         jetSource = cms.InputTag('slimmedJets'),
-        jetCorrections = ('AK4PFchs', cms.vstring(['L1FastJet', 'L2Relative', 'L3Absolute']), 'None'),
+        jetCorrections = ('AK4PFchs', cms.vstring(['L1FastJet', 'L2Relative', 'L3Absolute', 'L2L3Residual']), 'None'),
+        btagDiscriminators = ['jetProbabilityBJetTags']
         )
     process.updatedPatJets.addJetCorrFactors = False
+    process.updatedPatJets.discriminatorSources = cms.VInputTag("pfJetProbabilityBJetTags")
     process.updatedPatJets.addTagInfos = True
     process.updatedPatJets.addBTagInfo = cms.bool(True) ## Needed to add tag infos
     process.updatedPatJets.tagInfoSources = cms.VInputTag(
@@ -179,8 +211,10 @@ if addTagInfos:
     )
     process.tagInfoSequence.insert(0, process.pfImpactParameterTagInfos *
                                    process.pfInclusiveSecondaryVertexFinderTagInfos *
+                                   process.pfJetProbabilityBJetTags *
                                    process.updatedPatJets)
     process.akCs4PFJetAnalyzer.jetTag = "updatedPatJets"
+    
 
 process.akCs4PFJetAnalyzer.doSubJetsNew = cms.untracked.bool(True)
 
@@ -196,7 +230,7 @@ if doSvtx:
     process.akCs4PFJetAnalyzer.svTagInfoLabel = cms.untracked.string(svTagInfoLabel_)
 
 doDeclustering = True
-doAggregation = False
+doAggregation = True
 doChargedOnly = True
 doLatekt_ = False
 
@@ -228,7 +262,20 @@ if doDeclustering:
     process.akCs4PFJetAnalyzer.groomedJets = cms.untracked.InputTag("dynGroomedPFJets")
     ## creates the reco subjets
     
-
+#########################
+# Jet Selection
+#########################
+    
+# muon jet selector for b tagging SF
+process.mujetSelector = cms.EDFilter("PatJetXSelector",
+                             src = cms.InputTag("slimmedJets"),
+                             offPV = cms.InputTag("offlineSlimmedPrimaryVertices"),
+                             cut = cms.string("pt > 5.0 && abs(rapidity()) < 3."),
+                             dummy = cms.bool(False)
+                         )
+process.recoJetSequence.insert(0, process.mujetSelector)
+process.akCs4PFJetAnalyzer.doMujets = cms.untracked.bool(True)
+process.akCs4PFJetAnalyzer.mujetTag = cms.InputTag("mujetSelector")
 
 #########################
 # Event Selection -> add the needed filters here

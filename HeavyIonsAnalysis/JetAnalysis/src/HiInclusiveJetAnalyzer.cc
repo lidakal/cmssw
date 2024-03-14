@@ -21,6 +21,9 @@
 #include "fastjet/ClusterSequenceArea.hh"
 #include "fastjet/contrib/SoftDrop.hh"
 #include "AnalysisDataFormats/TrackInfo/interface/TrackToGenParticleMap.h"
+#include "JetMETCorrections/Modules/interface/JetResolution.h"
+#include "CondFormats/JetMETObjects/interface/JetCorrectionUncertainty.h"
+#include "TRandom.h"
 
 using namespace std;
 using namespace edm;
@@ -30,6 +33,11 @@ HiInclusiveJetAnalyzer::HiInclusiveJetAnalyzer(const edm::ParameterSet& iConfig)
   doMatch_ = iConfig.getUntrackedParameter<bool>("matchJets", false);
   jetTag_ = consumes<pat::JetCollection>(iConfig.getParameter<InputTag>("jetTag"));
   matchTag_ = consumes<pat::JetCollection>(iConfig.getUntrackedParameter<InputTag>("matchTag"));
+
+  doMujets_ = iConfig.getUntrackedParameter<bool>("doMujets", false);
+  if (doMujets_) mujetTag_ = consumes<pat::JetCollection>(iConfig.getParameter<InputTag>("mujetTag"));
+
+  jetTagInfos_ = consumes<reco::JetTagCollection>(edm::InputTag("pfJetProbabilityBJetTags"));
 
   useQuality_ = iConfig.getUntrackedParameter<bool>("useQuality", true);
   trackQuality_ = iConfig.getUntrackedParameter<std::string>("trackQuality", "highPurity");
@@ -49,9 +57,10 @@ HiInclusiveJetAnalyzer::HiInclusiveJetAnalyzer(const edm::ParameterSet& iConfig)
     svTagInfoLabel_ = iConfig.getUntrackedParameter<std::string>("svTagInfoLabel");
   }
 
-
   //reWTA reclustering
   doWTARecluster_ = iConfig.getUntrackedParameter<bool>("doWTARecluster", false);
+
+  rho_ = consumes<double>(iConfig.getParameter<edm::InputTag>("rhoSrc"));
 
   if (doGenTaus_) {
     tokenGenTau1_ = consumes<edm::ValueMap<float>>(iConfig.getParameter<edm::InputTag>("genTau1"));
@@ -113,6 +122,8 @@ HiInclusiveJetAnalyzer::HiInclusiveJetAnalyzer(const edm::ParameterSet& iConfig)
     deepCSVJetTags_ = "pfDeepCSVJetTags:probb";
     pfJPJetTags_ = "pfJetProbabilityBJetTags";
     deepFlavourJetTags_ = "pfDeepFlavourJetTags";
+    particleNetJetTags_ = "pfParticleNetAK4JetTags";
+    particleNetDiscriminatorsJetTags_ = "pfParticleNetAK4DiscriminatorsJetTags";
   }
   doSubEvent_ = false;
 
@@ -123,11 +134,11 @@ HiInclusiveJetAnalyzer::HiInclusiveJetAnalyzer(const edm::ParameterSet& iConfig)
 
   if (doSubJetsNew_) {
     groomedJetsToken_ = consumes<edm::View<reco::Jet>>(iConfig.getUntrackedParameter<edm::InputTag>("groomedJets", edm::InputTag("slimmedJets")));
-    pseudoHFToken_ = consumes<edm::View<pat::PackedCandidate>>(iConfig.getUntrackedParameter<edm::InputTag>("pseudoHF", edm::InputTag("dynGroomedPFJets", "pseudoHF")));
+    pseudoHFToken_ = consumes<edm::View<reco::PFCandidate>>(iConfig.getUntrackedParameter<edm::InputTag>("pseudoHF", edm::InputTag("dynGroomedPFJets", "pseudoHF")));
     // std::cout << "groomedJets have been consumed" << std::endl;
     if (isMC_) {
       groomedGenJetsToken_ = consumes<edm::View<reco::Jet>>(iConfig.getUntrackedParameter<edm::InputTag>("groomedGenJets", edm::InputTag("slimmedGenJets")));
-      pseudoHFGenToken_ = consumes<edm::View<pat::PackedCandidate>>(iConfig.getUntrackedParameter<edm::InputTag>("pseudoHF", edm::InputTag("dynGroomedGenJets", "pseudoHF")));
+      pseudoHFGenToken_ = consumes<edm::View<reco::PFCandidate>>(iConfig.getUntrackedParameter<edm::InputTag>("pseudoHF", edm::InputTag("dynGroomedGenJets", "pseudoHF")));
       // std::cout << "groomedGenJets have been consumed" << std::endl;
     }
   }
@@ -138,6 +149,8 @@ HiInclusiveJetAnalyzer::HiInclusiveJetAnalyzer(const edm::ParameterSet& iConfig)
     ipTagInfoLabel_ = iConfig.getUntrackedParameter<std::string>("ipTagInfoLabel");
     if (isMC_) {
       trackToGenParticleMapToken_ = consumes<reco::TrackToGenParticleMap>(iConfig.getUntrackedParameter<edm::InputTag>("trackToGenParticleMap", edm::InputTag("TrackToGenParticleMapProducer", "trackToGenParticleMap")));
+      // std::cout << "Before consuming " << std::endl;
+      droppedTracksToken_ = consumes<edm::View<reco::PFCandidate>>(iConfig.getUntrackedParameter<edm::InputTag>("droppedTracks", edm::InputTag("dynGroomedPFJets", "droppedTracks")));
       // std::cout << "Token is initialized " << std::endl;
     }
   }
@@ -170,7 +183,13 @@ void HiInclusiveJetAnalyzer::beginJob() {
   t->Branch("jtm", jets_.jtm, "jtm[nref]/F");
   t->Branch("jtarea", jets_.jtarea, "jtarea[nref]/F");
 
+  t->Branch("jer_sf_nom", jets_.jer_sf_nom, "jer_sf_nom[nref]/F");
+  t->Branch("jer_sf_up", jets_.jer_sf_up, "jer_sf_up[nref]/F");
+  t->Branch("jer_sf_down", jets_.jer_sf_down, "jer_sf_down[nref]/F");
+  t->Branch("jec_unc", jets_.jec_unc, "jec_unc[nref]/F");
+
   t->Branch("nvtx", &jets_.nvtx, "nvtx/I");
+  t->Branch("rho", &jets_.rho, "rho/F");
 
   //for reWTA reclustering
   if (doWTARecluster_) {
@@ -204,6 +223,7 @@ void HiInclusiveJetAnalyzer::beginJob() {
   }
 
   if (doSubJetsNew_) {
+    t->Branch("sjt1HasHF", jets_.sjt1HasHF, "sjt1HasHF[nref]/I");
     t->Branch("sjt1Pt", jets_.sjt1Pt, "sjt1Pt[nref]/F");
     t->Branch("sjt1Eta", jets_.sjt1Eta, "sjt1Eta[nref]/F");
     t->Branch("sjt1Phi", jets_.sjt1Phi, "sjt1Phi[nref]/F");
@@ -219,8 +239,10 @@ void HiInclusiveJetAnalyzer::beginJob() {
 
     t->Branch("jtmB", jets_.jtmB, "jtmB[nref]/F");
     t->Branch("jtBpt", jets_.jtBpt, "jtBpt[nref]/F");
+    t->Branch("jtBntracks", jets_.jtBntracks, "jtBntracks[nref]/F");
     
     if (isMC_) {
+      t->Branch("rsjt1HasHF", jets_.rsjt1HasHF, "rsjt1HasHF[nref]/I");
       t->Branch("rsjt1Pt", jets_.rsjt1Pt, "rsjt1Pt[nref]/F");
       t->Branch("rsjt1Eta", jets_.rsjt1Eta, "rsjt1Eta[nref]/F");
       t->Branch("rsjt1Phi", jets_.rsjt1Phi, "rsjt1Phi[nref]/F");
@@ -236,6 +258,7 @@ void HiInclusiveJetAnalyzer::beginJob() {
 
       t->Branch("refmB", jets_.refmB, "refmB[nref]/F");
       t->Branch("refBpt", jets_.refBpt, "refBpt[nref]/F");
+      t->Branch("refBntracks", jets_.refBntracks, "refBntracks[nref]/F");
     }
   }
 
@@ -328,6 +351,8 @@ void HiInclusiveJetAnalyzer::beginJob() {
     t->Branch("trkIp2dSig", jets_.trkIp2dSig, "trkIp2dSig[ntrk]/F");
     t->Branch("trkDistToAxisSig", jets_.trkDistToAxisSig, "trkDistToAxisSig[ntrk]/F");
     t->Branch("trkDistToAxis", jets_.trkDistToAxis, "trkDistToAxis[ntrk]/F");
+    t->Branch("trkIpProb3d", jets_.trkIpProb3d, "trkIpProb3d[ntrk]/F");
+    t->Branch("trkIpProb2d", jets_.trkIpProb2d, "trkIpProb2d[ntrk]/F");
     t->Branch("trkDz", jets_.trkDz, "trkDz[ntrk]/F");
     t->Branch("trkPdgId", jets_.trkPdgId, "trkPdgId[ntrk]/I");
     t->Branch("trkMatchSta", jets_.trkMatchSta, "trkMatchSta[ntrk]/I");
@@ -401,6 +426,18 @@ void HiInclusiveJetAnalyzer::beginJob() {
     t->Branch("discr_deepFlavour_bb", jets_.discr_deepFlavour_bb, "discr_deepFlavour_bb[nref]/F");
     t->Branch("discr_deepFlavour_lepb", jets_.discr_deepFlavour_lepb, "discr_deepFlavour_lepb[nref]/F");
     t->Branch("discr_deepFlavour_c", jets_.discr_deepFlavour_c, "discr_deepFlavour_c[nref]/F");
+    t->Branch("discr_particleNet_bb", jets_.discr_particleNet_bb, "discr_particleNet_bb[nref]/F");
+    t->Branch("discr_particleNet_pu", jets_.discr_particleNet_pu, "discr_particleNet_pu[nref]/F");
+    t->Branch("discr_particleNet_cc", jets_.discr_particleNet_cc, "discr_particleNet_cc[nref]/F");
+    t->Branch("discr_particleNet_undef", jets_.discr_particleNet_undef, "discr_particleNet_undef[nref]/F");
+    t->Branch("discr_particleNet_c", jets_.discr_particleNet_c, "discr_particleNet_c[nref]/F");
+    t->Branch("discr_particleNet_b", jets_.discr_particleNet_b, "discr_particleNet_b[nref]/F");
+    t->Branch("discr_particleNet_uds", jets_.discr_particleNet_uds, "discr_particleNet_uds[nref]/F");
+    t->Branch("discr_particleNet_g", jets_.discr_particleNet_g, "discr_particleNet_g[nref]/F");
+    t->Branch("discr_particleNet_BvsAll", jets_.discr_particleNet_BvsAll, "discr_particleNet_BvsAll[nref]/F");
+    t->Branch("discr_particleNet_CvsB", jets_.discr_particleNet_CvsB, "discr_particleNet_CvsB[nref]/F");
+    t->Branch("discr_particleNet_CvsL", jets_.discr_particleNet_CvsL, "discr_particleNet_CvsL[nref]/F");
+    t->Branch("discr_particleNet_QvsG", jets_.discr_particleNet_QvsG, "discr_particleNet_QvsG[nref]/F");
   }
   if (isMC_) {
     if (useHepMC_) {
@@ -573,6 +610,12 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
   edm::Handle<pat::JetCollection> matchedjets;
   iEvent.getByToken(matchTag_, matchedjets);
 
+  edm::Handle<pat::JetCollection> mujets;
+  if (doMujets_) iEvent.getByToken(mujetTag_, mujets);
+
+  edm::Handle<reco::JetTagCollection> jetTagInfos;
+  iEvent.getByToken(jetTagInfos_, jetTagInfos);
+
   if (doGenSubJets_)
     iEvent.getByToken(subjetGenTag_, gensubjets_);
   if (doGenSym_) {
@@ -580,8 +623,11 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
     iEvent.getByToken(tokenGenDroppedBranches_, genDroppedBranchesVM_);
   }
 
-  edm::Handle<edm::View<pat::PackedCandidate>> pseudoHFCollection; 
-  edm::Handle<edm::View<pat::PackedCandidate>> pseudoHFGenCollection; 
+  edm::Handle<edm::View<reco::PFCandidate>> pseudoHFCollection; 
+  edm::Handle<edm::View<reco::PFCandidate>> pseudoHFGenCollection; 
+
+  edm::Handle<double> rho;
+  iEvent.getByToken(rho_, rho);
 
   if (doSubJetsNew_) {
     iEvent.getByToken(groomedJetsToken_, groomedJets);
@@ -594,11 +640,14 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
     }
   }
 
+  edm::Handle<edm::View<reco::PFCandidate>> droppedTracks; // pointer to container of pointers
   edm::Handle<reco::TrackToGenParticleMap> trackToGenParticleMap;
   if (doTracks_) {
     if (isMC_) {
       iEvent.getByToken(trackToGenParticleMapToken_, trackToGenParticleMap);
-      // std::cout << "entries in map: " << trackToGenParticleMap->size() << std::endl;
+      // std::cout << "before getByToken" << std::endl;
+      iEvent.getByToken(droppedTracksToken_, droppedTracks);
+      // std::cout << "after getByToken, ndroppedTracks=" << droppedTracks->size() << std::endl;
     }
   }
 
@@ -613,10 +662,12 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
 
   iEvent.getByToken(primaryVerticesToken_, primaryVertices);
 
-
+  // std::cout << "got all tokens " << std::endl;
   // FILL JRA TREE
   jets_.nref = 0;
   jets_.nvtx = primaryVertices->size();
+  jets_.rho = (float) *rho;
+  // std::cout << *rho << ", " << jets_.rho << std::endl;
   
   if (doTracks_) jets_.ntrk = 0;
   if (doSvtx_) {
@@ -665,20 +716,57 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
 
   for (unsigned int j = 0; j < jets->size(); ++j) {
     const pat::Jet& jet = (*jets)[j];
-
+    // std::cout << "new jet with pt = " << jet.pt() << std::endl;
     auto pt = useRawPt_ ? jet.correctedJet("Uncorrected").pt() : jet.pt();
     if (pt < jetPtMin_)
       continue;
     if (std::abs(jet.eta()) > jetAbsEtaMax_)
       continue;
 
+    if (doMujets_) {
+      bool isMujet = false;
+      double eps=1e-4;
+      for (auto mujet : *mujets) {
+        if (abs(jet.eta()-mujet.eta())>eps) continue;
+        if (abs(jet.phi()-mujet.phi())>eps) continue;
+        if (abs(jet.pt()-mujet.pt())>eps) continue;
+        isMujet = true;
+        // std::cout << "jtpt=" << jet.pt() << ", mujetpt=" << mujet.pt() << std::endl;
+        break;
+      }    
+
+      if (!isMujet) continue;
+    }
+
     if (doCandidateBtagging_){
       jets_.discr_deepCSV[jets_.nref] = jet.bDiscriminator(deepCSVJetTags_);
-      jets_.discr_pfJP[jets_.nref] = jet.bDiscriminator(pfJPJetTags_);
+      // jets_.discr_pfJP[jets_.nref] = jet.bDiscriminator(pfJPJetTags_);
+      jets_.discr_pfJP[jets_.nref] = (*jetTagInfos)[j].second;
       jets_.discr_deepFlavour_b[jets_.nref] = jet.bDiscriminator(deepFlavourJetTags_ + ":probb");
       jets_.discr_deepFlavour_bb[jets_.nref] = jet.bDiscriminator(deepFlavourJetTags_ + ":probbb");
       jets_.discr_deepFlavour_lepb[jets_.nref] = jet.bDiscriminator(deepFlavourJetTags_ + ":problepb");
-      jets_.discr_deepFlavour_c[jets_.nref] = jet.bDiscriminator(deepFlavourJetTags_ + ":probc");
+      jets_.discr_deepFlavour_c[jets_.nref] = jet.bDiscriminator(deepFlavourJetTags_ + ":probbb");
+      jets_.discr_particleNet_bb[jets_.nref] = jet.bDiscriminator(deepFlavourJetTags_ + ":probc");
+      jets_.discr_particleNet_pu[jets_.nref] = jet.bDiscriminator(particleNetJetTags_ + ":probpu");
+      jets_.discr_particleNet_cc[jets_.nref] = jet.bDiscriminator(particleNetJetTags_ + ":probcc");
+      jets_.discr_particleNet_undef[jets_.nref] = jet.bDiscriminator(particleNetJetTags_ + ":probundef");
+      jets_.discr_particleNet_c[jets_.nref] = jet.bDiscriminator(particleNetJetTags_ + ":probc");
+      jets_.discr_particleNet_b[jets_.nref] = jet.bDiscriminator(particleNetJetTags_ + ":probb");
+      jets_.discr_particleNet_uds[jets_.nref] = jet.bDiscriminator(particleNetJetTags_ + ":probuds");
+      jets_.discr_particleNet_g[jets_.nref] = jet.bDiscriminator(particleNetJetTags_ + ":probg");
+      jets_.discr_particleNet_BvsAll[jets_.nref] = jet.bDiscriminator(particleNetDiscriminatorsJetTags_ + ":BvsAll");
+      jets_.discr_particleNet_CvsB[jets_.nref] = jet.bDiscriminator(particleNetDiscriminatorsJetTags_ + ":CvsB");
+      jets_.discr_particleNet_CvsL[jets_.nref] = jet.bDiscriminator(particleNetDiscriminatorsJetTags_ + ":CvsL");
+      jets_.discr_particleNet_QvsG[jets_.nref] = jet.bDiscriminator(particleNetDiscriminatorsJetTags_ + ":QvsG");
+
+      // for (auto discrPair : jet.getPairDiscri()) {
+      //   TString label = discrPair.first;
+      //   // if (!label.Contains("Deep") && !label.Contains("deep") && !label.Contains("Net")) continue;
+      //   if (!label.Contains("Net")) continue;
+      //   // if (!label.Contains("pfJetProbabilityBJetTags")) continue;
+      //   std::cout << label << " : " << discrPair.second << std::endl; 
+      // }
+      // std::cout << "end of b tagging" << std::endl;
     }
     if (doLegacyBtagging_) {
       jets_.discr_ssvHighEff[jets_.nref] = jet.bDiscriminator(simpleSVHighEffBJetTags_);
@@ -750,7 +838,7 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
 
             // get status of track 
             int status = -1;
-            if (trackToGenParticleMap->find(svTrk) != trackToGenParticleMap->end()) { 
+            if (isMC_ && trackToGenParticleMap->find(svTrk) != trackToGenParticleMap->end()) { 
               edm::Ptr<pat::PackedGenParticle> matchGenParticle = trackToGenParticleMap->at(svTrk);
               status = matchGenParticle->status();
             }
@@ -768,6 +856,7 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
 
     // std::cout << "New jet with nref " << jets_.nref << std::endl;
     // std::cout << svTagInfos_ << std::endl;
+    // std::cout << "start of svtx" << std::endl;
     if (doSvtx_ && jet.hasTagInfo(svTagInfoLabel_.c_str())) {
       const reco::CandSecondaryVertexTagInfo *svTagInfo = jet.tagInfoCandSecondaryVertex(svTagInfoLabel_.c_str());
       int nsv = svTagInfo->nVertices();
@@ -830,7 +919,7 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
 
             // get status of track 
             int status = -1;
-            if (trackToGenParticleMap->find(svTrk) != trackToGenParticleMap->end()) { 
+            if (isMC_ && trackToGenParticleMap->find(svTrk) != trackToGenParticleMap->end()) { 
               edm::Ptr<pat::PackedGenParticle> matchGenParticle = trackToGenParticleMap->at(svTrk);
               status = matchGenParticle->status();
             }
@@ -844,13 +933,12 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
       jets_.jtNsvtx[jets_.nref] = nsv;
       jets_.nsvtx += nsv;
     } // endif doSvtx_
-
+    // std::cout << "end of svtx" << std::endl;
     // std::cout << "Jet has tag infos: " << std::endl;
     // for (auto label : jet.tagInfoLabels()) {
     //   std::cout << label << std::endl;
     // }
 
-    
     if (doTracks_ && jet.hasTagInfo(ipTagInfoLabel_.c_str())) {
       jets_.jtNtrk[jets_.nref] = 0;
       jets_.jtptCh[jets_.nref] = 0.;
@@ -858,14 +946,42 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
       const std::vector<reco::btag::TrackIPData> ipData = ipTagInfo->impactParameterData();
       const std::vector<reco::CandidatePtr> ipTracks = ipTagInfo->selectedTracks();
 
+      reco::Candidate::PolarLorentzVector chJet(0., 0., 0., 0.);
+
       for (const reco::CandidatePtr constit : jet.getJetConstituents()) {
         // std::cout << "new jet constit with pt " << constit->pt() << std::endl;
         if (constit->charge() == 0) continue;
-        if (constit->pt() < trkPtCut_) continue;
+        if (constit->pt() < trkPtCut_) continue;        
 
         auto itIPTrack = std::find(ipTracks.begin(), ipTracks.end(), constit);
         if (itIPTrack == ipTracks.end()) continue;
+
+        
+
+        // Check if the track was dropped from the aggregation
+        if (isMC_) {
+          bool drop = false;
+          double eps = 1e-4;
+          // std::cout << "before droppedTracks" << std::endl;
+          for (size_t idropped=0; idropped<droppedTracks->size(); idropped++) {
+            reco::PFCandidate droppedTrack = (*droppedTracks)[idropped];
+            if (std::abs(constit->eta()-droppedTrack.eta())>eps) continue;
+            if (std::abs(constit->phi()-droppedTrack.phi())>eps) continue;
+            if (std::abs(constit->pt()-droppedTrack.pt())>eps) continue;
+            drop = true;
+          }
+          if (drop) continue;
+          // std::cout << "after droppedTracks" << std::endl;
+        }
+
         int ijetTrack = jets_.ntrk + jets_.jtNtrk[jets_.nref];
+
+        reco::Candidate::PolarLorentzVector constitV(0., 0., 0., 0.);
+        constitV.SetPt(constit->pt());
+        constitV.SetEta(constit->eta());
+        constitV.SetPhi(constit->phi());
+        constitV.SetM(constit->mass());
+        chJet += constitV;
 
         int itrk = itIPTrack - ipTracks.begin();
         const reco::btag::TrackIPData trkIPData = ipData[itrk];
@@ -881,6 +997,9 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
 
         jets_.trkIp2d[ijetTrack] = trkIPData.ip2d.value();
         jets_.trkIp2dSig[ijetTrack] = trkIPData.ip2d.significance();
+
+        jets_.trkIpProb3d[ijetTrack] = ipTagInfo->probabilities(0)[itrk];
+        jets_.trkIpProb2d[ijetTrack] = ipTagInfo->probabilities(1)[itrk];
 
         jets_.trkDistToAxis[ijetTrack] = trkIPData.distanceToJetAxis.value();
         jets_.trkDistToAxisSig[ijetTrack] = trkIPData.distanceToJetAxis.significance();
@@ -898,7 +1017,7 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
         } // end doSvtx_
 
         Int_t status = -1; // default, no match
-        if (trackToGenParticleMap->find(constit) != trackToGenParticleMap->end()) { 
+        if (isMC_ && trackToGenParticleMap->find(constit) != trackToGenParticleMap->end()) { 
           edm::Ptr<pat::PackedGenParticle> matchGenParticle = trackToGenParticleMap->at(constit);
           status = matchGenParticle->status();
         }
@@ -914,9 +1033,10 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
           jets_.trkDz[ijetTrack] = -100000.;
         }
 
-        jets_.jtptCh[jets_.nref] += constit->pt();
         jets_.jtNtrk[jets_.nref]++;
       } // jet constituent loop
+
+      jets_.jtptCh[jets_.nref] = chJet.pt();
       nsvtxCounterForTracks += jets_.jtNsvtx[jets_.nref];
       jets_.ntrk += jets_.jtNtrk[jets_.nref];
     } // endif doTracks_
@@ -1075,6 +1195,7 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
 
     jets_.rawpt[jets_.nref] = jet.correctedJet("Uncorrected").pt();
     jets_.jtpt[jets_.nref] = jet.pt();
+    // std::cout << "uncorrected = " << jets_.rawpt[jets_.nref] << ", corrected = " << jets_.jtpt[jets_.nref] << std::endl;
     jets_.jteta[jets_.nref] = jet.eta();
     jets_.jtphi[jets_.nref] = jet.phi();
     jets_.jty[jets_.nref] = jet.eta();
@@ -1122,6 +1243,9 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
           jets_.sjt1Eta[jets_.nref] = sjt1.eta();
           jets_.sjt1Phi[jets_.nref] = sjt1.phi();
 
+          if (groomedJet.jetArea() > 0.5) jets_.sjt1HasHF[jets_.nref] = 1;
+          else jets_.sjt1HasHF[jets_.nref] = 0;
+
           // std::cout << "new sjt" << std::endl;
           // std::cout << "\tsjt1Y = " << sjt1.y() << std::endl;
           // std::cout << "\tsjt1E = " << sjt1.energy() << std::endl;
@@ -1145,6 +1269,8 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
             jets_.sjt2Pz[jets_.nref] = -999;
           }
         } else {
+          jets_.sjt1HasHF[jets_.nref] = -1;
+
           jets_.sjt1E[jets_.nref] = -1;
           jets_.sjt1Y[jets_.nref] = -999;
           jets_.sjt1Pz[jets_.nref] = -999;
@@ -1154,12 +1280,14 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
         }     
         if (pseudoHFCollection->size() > 0) {
           // std::cout << "in pseudoHFCollection" << std::endl;
-          pat::PackedCandidate pseudoHF = (*pseudoHFCollection)[iGroomedJet];
+          reco::PFCandidate pseudoHF = (*pseudoHFCollection)[iGroomedJet];
           jets_.jtmB[jets_.nref] = pseudoHF.mass();
           jets_.jtBpt[jets_.nref] = pseudoHF.pt();
+          jets_.jtBntracks[jets_.nref] = pseudoHF.numberOfDaughters();
         } else {
           jets_.jtmB[jets_.nref] = -1.;
           jets_.jtBpt[jets_.nref] = -1;
+          jets_.jtBntracks[jets_.nref] = -1;
         }
       } // end if groomedJet match exists
     
@@ -1190,6 +1318,9 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
               jets_.rsjt1Pt[jets_.nref] = rsjt1.pt();
               jets_.rsjt1Eta[jets_.nref] = rsjt1.eta();
               jets_.rsjt1Phi[jets_.nref] = rsjt1.phi();
+
+              if (groomedGenJet.jetArea() > 0.5) jets_.rsjt1HasHF[jets_.nref] = 1;
+              else jets_.rsjt1HasHF[jets_.nref] = 0;
               
               if (groomedGenJet.numberOfDaughters() > 1) {
                 const Candidate & rsjt2 = *groomedGenJet.daughter(1);
@@ -1208,6 +1339,8 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
                 jets_.rsjt2Pz[jets_.nref] = -999;
               }
             } else {
+              jets_.rsjt1HasHF[jets_.nref] = -1;
+
               jets_.rsjt1E[jets_.nref] = -1;
               jets_.rsjt1Y[jets_.nref] = -999;
               jets_.rsjt1Pz[jets_.nref] = -999;
@@ -1217,23 +1350,43 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
             }   
             if (pseudoHFGenCollection->size() > 0) {
               // std::cout << "in pseudoHFGenCollection" << std::endl;
-              pat::PackedCandidate pseudoBGen = (*pseudoHFGenCollection)[iGroomedGenJet];
+              reco::PFCandidate pseudoBGen = (*pseudoHFGenCollection)[iGroomedGenJet];
               jets_.refmB[jets_.nref] = pseudoBGen.mass();
               jets_.refBpt[jets_.nref] = pseudoBGen.pt();
+              jets_.refBntracks[jets_.nref] = pseudoBGen.numberOfDaughters();
             } else {
               jets_.refmB[jets_.nref] = -1.;
               jets_.refBpt[jets_.nref] = -1;
+              jets_.refBntracks[jets_.nref] = -1;
             }
           } // end if groomedGenJet match exists
           // get charged pt of gen jet
           jets_.refptCh[jets_.nref] = 0.;
           jets_.refNtrk[jets_.nref] = 0;
+
+          reco::Candidate::PolarLorentzVector chGenJet(0., 0., 0., 0.);
+
           for (auto genConstit : genJet->getJetConstituents()) {
             if (genConstit->pt() < trkPtCut_) continue;
             if (genConstit->charge() == 0) continue;
-            jets_.refptCh[jets_.nref] += genConstit->pt();
+
+            bool isNeutrino = (genConstit->pdgId() == 12); // nue
+            isNeutrino &= (genConstit->pdgId() == 14); // numu
+            isNeutrino &= (genConstit->pdgId() == 16); // nutau
+            isNeutrino &= (genConstit->pdgId() == 18); // nutau'
+            if (isNeutrino) continue;
+
+            reco::Candidate::PolarLorentzVector constitV(0., 0., 0., 0.);
+            constitV.SetPt(genConstit->pt());
+            constitV.SetEta(genConstit->eta());
+            constitV.SetPhi(genConstit->phi());
+            constitV.SetM(genConstit->mass());
+            chGenJet += constitV;
+            
             jets_.refNtrk[jets_.nref] += 1;
           }
+
+          jets_.refptCh[jets_.nref] = chGenJet.pt();
         } // end if matched gen jet exists
       } // end if isMC_
     } // end if doSubJetsNew_
@@ -1358,6 +1511,50 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
       jets_.reftau1[jets_.nref] = -999.;
       jets_.reftau2[jets_.nref] = -999.;
       jets_.reftau3[jets_.nref] = -999.;
+
+      // Get JER SFs
+      JME::JetResolution resolution; // det-level jet is not matched to a truth-level jet
+      JME::JetResolutionScaleFactor resolution_sf; // det-level jet is matched to a truth-level jet
+
+      // std::cout << "right before creating the jer objects " << std::endl;
+      resolution = JME::JetResolution(edm::FileInPath("HeavyIonsAnalysis/JetAnalysis/data/Summer19UL17_JRV3_MC_PtResolution_AK4PFchs.txt").fullPath());
+      resolution_sf = JME::JetResolutionScaleFactor(edm::FileInPath("HeavyIonsAnalysis/JetAnalysis/data/Summer19UL17_JRV3_MC_SF_AK4PFchs.txt").fullPath());
+
+      // std::cout << "created resolution objects" << std::endl;
+      JME::JetParameters parameters_1;
+      parameters_1.setJetPt(jets_.jtpt[jets_.nref]);
+      parameters_1.setJetEta(jets_.jteta[jets_.nref]);
+      parameters_1.setRho(0.);
+
+      double sf;
+      double sim_resolution = resolution.getResolution(parameters_1);
+
+      sf = resolution_sf.getScaleFactor(parameters_1, Variation::NOMINAL);
+      // std::cout << "read the sf" << std::endl;
+      if (jets_.refpt[jets_.nref] > 0 ) sf = 1+(sf-1)*(jets_.jtpt[jets_.nref]-jets_.refpt[jets_.nref])/(jets_.jtpt[jets_.nref]); // det-level jet is matched to truth-level jet
+      else sf = 1+gRandom->Gaus(0,sim_resolution)*std::sqrt(sf*sf-1); // “stochastic” smearing, which is what you will probably use for HIN
+      jets_.jer_sf_nom[jets_.nref] = sf;
+
+      sf = resolution_sf.getScaleFactor(parameters_1, Variation::UP);
+      if (jets_.refpt[jets_.nref] > 0 ) sf = 1+(sf-1)*(jets_.jtpt[jets_.nref]-jets_.refpt[jets_.nref])/(jets_.jtpt[jets_.nref]); // det-level jet is matched to truth-level jet
+      else sf = 1+gRandom->Gaus(0,sim_resolution)*std::sqrt(sf*sf-1); // “stochastic” smearing, which is what you will probably use for HIN
+      jets_.jer_sf_up[jets_.nref] = sf;
+
+      sf = resolution_sf.getScaleFactor(parameters_1, Variation::DOWN);
+      if (jets_.refpt[jets_.nref] > 0 ) sf = 1+(sf-1)*(jets_.jtpt[jets_.nref]-jets_.refpt[jets_.nref])/(jets_.jtpt[jets_.nref]); // det-level jet is matched to truth-level jet
+      else sf = 1+gRandom->Gaus(0,sim_resolution)*std::sqrt(sf*sf-1); // “stochastic” smearing, which is what you will probably use for HIN
+      jets_.jer_sf_down[jets_.nref] = sf;
+
+      // Get JEC uncertainty
+      JetCorrectionUncertainty *jecUnc;
+      jecUnc = new JetCorrectionUncertainty(edm::FileInPath("HeavyIonsAnalysis/JetAnalysis/data/Summer19UL17_V5_MC_Uncertainty_AK4PFchs.txt").fullPath());
+      // std::cout << "created the jec unc object" << std::endl;
+      jecUnc->setJetEta(jets_.jteta[jets_.nref]);
+      jecUnc->setJetPt(jets_.jtpt[jets_.nref]);
+      double unc = jecUnc->getUncertainty(true); //this returns the uncertainty on the correction, it should be of order 1-2%
+      // Vary correction with newCorrection=1+factor*unc; jtpt=jtpt*newCorrection; where factor=0(nom) or +-1(up,down)
+      jets_.jec_unc[jets_.nref] = unc;
+      // std::cout << "read the jec unc" << std::endl;
 
       jets_.refparton_flavorForB[jets_.nref] = jet.partonFlavour();
 

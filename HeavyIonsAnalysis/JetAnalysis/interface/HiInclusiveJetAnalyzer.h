@@ -28,13 +28,15 @@
 
 #include "SimDataFormats/JetMatching/interface/JetFlavourInfo.h"
 #include "SimDataFormats/JetMatching/interface/JetFlavourInfoMatching.h"
-//
+
 
 /**\class HiInclusiveJetAnalyzer
 
    \author Matt Nguyen
    \date   November 2010
 */
+
+
 
 class HiInclusiveJetAnalyzer : public edm::EDAnalyzer {
 public:
@@ -49,6 +51,7 @@ public:
   void beginJob() override;
 
 private:
+  
   // for reWTA reclustering-----------------------
   bool doWTARecluster_ = false;
   fastjet::JetDefinition WTAjtDef =
@@ -76,6 +79,12 @@ private:
   edm::EDGetTokenT<edm::View<reco::GenJet>> genjetTag_;
   edm::EDGetTokenT<edm::HepMCProduct> eventInfoTag_;
   edm::EDGetTokenT<GenEventInfoProduct> eventGenInfoTag_;
+  edm::EDGetTokenT<double> rho_;
+
+  bool doMujets_ = false;
+  edm::EDGetTokenT<pat::JetCollection> mujetTag_;
+
+  edm::EDGetTokenT<reco::JetTagCollection> jetTagInfos_;
 
   std::string jetName_;  //used as prefix for jet structures
   edm::EDGetTokenT<edm::View<reco::Jet>> subjetGenTag_;
@@ -89,13 +98,15 @@ private:
   edm::Handle<edm::ValueMap<int>> genDroppedBranchesVM_;
 
   edm::Handle<edm::View<reco::Jet>> groomedJets; 
-  edm::Handle<edm::View<reco::Jet>> groomedGenJets; 
-
   edm::EDGetTokenT<edm::View<reco::Jet>> groomedJetsToken_;
+
+  edm::Handle<edm::View<reco::Jet>> groomedGenJets; 
   edm::EDGetTokenT<edm::View<reco::Jet>> groomedGenJetsToken_;
 
-  edm::EDGetTokenT<edm::View<pat::PackedCandidate>> pseudoHFToken_;
-  edm::EDGetTokenT<edm::View<pat::PackedCandidate>> pseudoHFGenToken_;
+  edm::EDGetTokenT<edm::View<reco::PFCandidate>> droppedTracksToken_;  
+
+  edm::EDGetTokenT<edm::View<reco::PFCandidate>> pseudoHFToken_;
+  edm::EDGetTokenT<edm::View<reco::PFCandidate>> pseudoHFGenToken_;
 
   edm::EDGetTokenT<reco::TrackToGenParticleMap> trackToGenParticleMapToken_;
 
@@ -154,6 +165,8 @@ private:
   std::string deepCSVJetTags_;
   std::string pfJPJetTags_;
   std::string deepFlavourJetTags_;
+  std::string particleNetJetTags_;
+  std::string particleNetDiscriminatorsJetTags_;
   std::string ipTagInfos_;
   std::string svTagInfos_;
 
@@ -168,11 +181,17 @@ private:
     int lumi=0;
 
     int nvtx=0;
+    float rho=-999;
 
     float rawpt[MAXJETS]={0};
     float jtpt[MAXJETS]={0};
     float jteta[MAXJETS]={0};
     float jtphi[MAXJETS]={0};
+
+    float jer_sf_nom[MAXJETS]={0};
+    float jer_sf_up[MAXJETS]={0};
+    float jer_sf_down[MAXJETS]={0};
+    float jec_unc[MAXJETS]={0};
 
     // jet true flavour tagging
     int jtParFlav[MAXJETS]={0};
@@ -182,12 +201,14 @@ private:
     int jtNbPar[MAXJETS]={0};
     int jtNcPar[MAXJETS]={0};
 
-    // jet aggregated pseudo-B mass
+    // jet aggregated pseudo-B
     float jtmB[MAXJETS]={0};
     float jtBpt[MAXJETS]={0};
+    float jtBntracks[MAXJETS]={0};
     float jtptCh[MAXJETS]={0};
     float refmB[MAXJETS]={0};
     float refBpt[MAXJETS]={0};
+    float refBntracks[MAXJETS]={0};
     float refptCh[MAXJETS]={0};
     int refNtrk[MAXJETS]={0};
 
@@ -226,6 +247,7 @@ private:
     std::vector<std::vector<float>> jtSubJetPhi = {};
     std::vector<std::vector<float>> jtSubJetM = {};
 
+    int sjt1HasHF[MAXJETS] = {0};
     float sjt1Pt[MAXJETS] = {0};
     float sjt1Eta[MAXJETS] = {0};
     float sjt1Phi[MAXJETS] = {0};
@@ -239,6 +261,7 @@ private:
     float sjt2Y[MAXJETS] = {0};
     float sjt2Pz[MAXJETS] = {0};
 
+    int rsjt1HasHF[MAXJETS] = {0};
     float rsjt1Pt[MAXJETS] = {0};
     float rsjt1Eta[MAXJETS] = {0};
     float rsjt1Phi[MAXJETS] = {0};
@@ -345,6 +368,18 @@ private:
     float discr_deepFlavour_bb[MAXJETS]={0};
     float discr_deepFlavour_lepb[MAXJETS]={0};
     float discr_deepFlavour_c[MAXJETS]={0};
+    float discr_particleNet_bb[MAXJETS]={0};
+    float discr_particleNet_pu[MAXJETS]={0};
+    float discr_particleNet_cc[MAXJETS]={0};
+    float discr_particleNet_undef[MAXJETS]={0};
+    float discr_particleNet_c[MAXJETS]={0};
+    float discr_particleNet_b[MAXJETS]={0};
+    float discr_particleNet_uds[MAXJETS]={0};
+    float discr_particleNet_g[MAXJETS]={0};
+    float discr_particleNet_BvsAll[MAXJETS]={0};
+    float discr_particleNet_CvsB[MAXJETS]={0};
+    float discr_particleNet_CvsL[MAXJETS]={0};
+    float discr_particleNet_QvsG[MAXJETS]={0};
     float discr_muByIp3[MAXJETS]={0};
     float discr_muByPt[MAXJETS]={0};
     float discr_prob[MAXJETS]={0};
@@ -402,6 +437,8 @@ private:
     float trkIp2dSig[MAXTRACKS]={0};
     float trkDistToAxis[MAXTRACKS]={0};
     float trkDistToAxisSig[MAXTRACKS]={0};
+    float trkIpProb3d[MAXTRACKS]={0};
+    float trkIpProb2d[MAXTRACKS]={0};
     float trkDz[MAXTRACKS]={0};
     int trkPdgId[MAXTRACKS]={0};
     int trkMatchSta[MAXTRACKS]={0};

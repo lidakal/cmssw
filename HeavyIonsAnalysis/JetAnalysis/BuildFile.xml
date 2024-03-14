@@ -15,4 +15,5 @@
 <use name="RecoJets/JetProducers"/>
 <use name="RecoHI/HiJetAlgos"/>
 <use name="CondFormats/JetMETObjects"/>
+<use name="JetMETCorrections/Modules"/>
 <flags EDM_PLUGIN="1"/>
