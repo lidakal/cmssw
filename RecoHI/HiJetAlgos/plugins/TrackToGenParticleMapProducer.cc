@@ -76,6 +76,7 @@ private:
   double maxDR2_;
   double minRelPt_;
   double maxRelPt_;
+  bool chargedOnly_;
 
   // Private functions
   GenTypePtr findMatch(TrackTypePtr, edm::Handle<std::vector<GenType>>) const;
@@ -89,6 +90,8 @@ TrackToGenParticleMapProducer::TrackToGenParticleMapProducer(const edm::Paramete
   maxDR2_ = cfg.getUntrackedParameter<double>("maxDR2", 0.0004);
   minRelPt_ = cfg.getUntrackedParameter<double>("minRelPt", 0.8);
   maxRelPt_ = cfg.getUntrackedParameter<double>("maxRelPt", 1.2);
+
+  chargedOnly_ = cfg.getUntrackedParameter<bool>("chargedOnly", true);
 
   produces<MapType>("trackToGenParticleMap");
   produces<MapType>("genConstitToGenParticleMap");
@@ -114,11 +117,11 @@ void TrackToGenParticleMapProducer::produce(edm::StreamID, edm::Event &evt, cons
   for (const JetType jet : *inputJets) {
     // std::cout << "New jet" << std::endl;
 
-    // Go over the charged jet constituents (aka tracks)
+    // Go over the jet constituents
     for (const TrackTypePtr constitPtr : jet.getJetConstituents()) {
-      if (constitPtr->charge() == 0) continue;
+      if (chargedOnly_&&constitPtr->charge()==0) continue;
 
-      // Look for match in charged gen particles 
+      // Look for match in gen particles 
       GenTypePtr matchGenParticle = findMatch(constitPtr, genParticles);
       if (matchGenParticle.isNonnull()) 
         trackToGenParticleMap->insert(std::pair<TrackTypePtr, GenTypePtr>(constitPtr, matchGenParticle));
@@ -128,9 +131,9 @@ void TrackToGenParticleMapProducer::produce(edm::StreamID, edm::Event &evt, cons
     const GenJetType *genJet = jet.genJet();
     if (!genJet) continue;
 
-    // Go over the charged gen jet constituents 
+    // Go over the gen jet constituents 
     for (const TrackTypePtr constitPtr : genJet->getJetConstituents()) {
-      if (constitPtr->charge() == 0) continue;
+      if (chargedOnly_&&constitPtr->charge()==0) continue;
 
       GenTypePtr matchGenParticle = findMatch(constitPtr, genParticles);
       if (matchGenParticle.isNonnull()) 
@@ -144,14 +147,14 @@ void TrackToGenParticleMapProducer::produce(edm::StreamID, edm::Event &evt, cons
     for (int isv = 0; isv < nsv; isv++) {
       const std::vector<reco::CandidatePtr> svTracks = svTagInfo->vertexTracks(isv);
       for (auto svTrkPtr : svTracks) {
-        if (svTrkPtr->charge() == 0) continue;
+        if (chargedOnly_&&svTrkPtr->charge()==0) continue;
 
         // Look if the particle is already in the map
         if (trackToGenParticleMap->find(svTrkPtr) != trackToGenParticleMap->end()) {
           continue;
         }
 
-        // If not, look for match in charged gen particles 
+        // If not, look for match in gen particles 
         GenTypePtr matchGenParticle = findMatch(svTrkPtr, genParticles);
         if (matchGenParticle.isNonnull()) 
           trackToGenParticleMap->insert(std::pair<TrackTypePtr, GenTypePtr>(svTrkPtr, matchGenParticle));
@@ -171,7 +174,7 @@ TrackToGenParticleMapProducer::GenTypePtr
   for (size_t igen = 0; igen < (*genParticles).size(); igen++) {
     edm::Ref<std::vector<GenType>> genParticleRef_(genParticles, int(igen));
     GenTypePtr genParticlePtr = edm::refToPtr(genParticleRef_);
-    if (genParticlePtr->charge() == 0) continue;
+    if (chargedOnly_&&genParticlePtr->charge()==0) continue;
 
     double DR2 = reco::deltaR2(*cand, *genParticlePtr);
     if (DR2 > maxDR2_) continue;
@@ -197,6 +200,7 @@ void TrackToGenParticleMapProducer::fillDescriptions(edm::ConfigurationDescripti
   desc.addUntracked<double>("maxDR2", 0.0004);
   desc.addUntracked<double>("minRelPt", 0.8);
   desc.addUntracked<double>("maxRelPt", 1.2);
+  desc.addUntracked<bool>("chargedOnly", true);
 
   descriptions.add("TrackToGenParticleMapProducer", desc);
 }
