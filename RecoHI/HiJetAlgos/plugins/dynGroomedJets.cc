@@ -241,9 +241,16 @@ void dynGroomedJets<T>::produce(edm::StreamID, edm::Event& iEvent, const edm::Ev
   int jetIndex = 0;
   for (const T& jet : *jets) { 
     // std::cout << "new jet with pt: " << jet.pt() << std::endl;
-
-    p4_hardJets.push_back(math::XYZTLorentzVector(jet.px(), jet.py(), jet.pz(), jet.energy()));
-    area_hardJets.push_back(jet.jetArea());
+    if (doGenJets_ && isMC_) {
+      const reco::GenJet *genJet = jet.genJet();
+      if (!genJet) continue;
+      p4_hardJets.push_back(math::XYZTLorentzVector(genJet->px(), genJet->py(), genJet->pz(), genJet->energy()));
+      area_hardJets.push_back(genJet->jetArea());
+    } else {
+      p4_hardJets.push_back(math::XYZTLorentzVector(jet.px(), jet.py(), jet.pz(), jet.energy()));
+      area_hardJets.push_back(jet.jetArea());
+    }
+    
 
     std::vector<fastjet::PseudoJet> jetConstituents = {};
 
@@ -268,8 +275,10 @@ void dynGroomedJets<T>::produce(edm::StreamID, edm::Event& iEvent, const edm::Ev
           auto tempTuple = aggregateHFGen(*genJet, *candToGenParticleMap);
           jetConstituents = std::get<0>(tempTuple);
           pseudoHF = std::get<2>(tempTuple);
+        } else {
+          continue;
         }
-        // std::cout << "genjet i = " << jetIndex << " pt " << jet.pt() << " mb " << pseudoHF.mass() << std::endl;
+        // std::cout << "genjet i = " << jetIndex << " pt " << jet.pt() << " pt " << pseudoHF.pt() << std::endl;
       } else {
 		    // std::cout << "------->Aggregating HF for reco jet" << std::endl; 
         reco::TrackToGenParticleMap recoMap = isMC_ ? *candToGenParticleMap : reco::TrackToGenParticleMap();
@@ -824,6 +833,15 @@ typename dynGroomedJets<T>::jetConstituentsPseudoHFTuple dynGroomedJets<T>::aggr
   for (edm::Ptr<reco::Candidate> constit : inputJetConstituents) {
     if(chargedOnly_ && constit->charge() == 0) continue;
     if(constit->pt() < ptCut_) continue;
+
+    bool isNeutrino = (constit->pdgId() == 12); // nue
+    isNeutrino &= (constit->pdgId() == 14); // numu
+    isNeutrino &= (constit->pdgId() == 16); // nutau
+    isNeutrino &= (constit->pdgId() == 18); // nutau'
+    if (isNeutrino) {
+      std::cout << "found a neutrino" << std::endl;
+      continue;
+    }
   
     // Get status of matched gen particle
     edm::Ptr<pat::PackedGenParticle> matchGenParticle = candToGenParticleMap.at(constit);
@@ -835,6 +853,7 @@ typename dynGroomedJets<T>::jetConstituentsPseudoHFTuple dynGroomedJets<T>::aggr
       outputJetConstituents.push_back(outConstit);
     } else if (status >= 100) {
       hfConstituentsMap[status].push_back(constit);
+      // std::cout << "constit pt=" << constit->pt() << std::endl;
     }
   } // end constit loop 
 
