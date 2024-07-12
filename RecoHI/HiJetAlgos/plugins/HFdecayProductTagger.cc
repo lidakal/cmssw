@@ -75,7 +75,8 @@ HFdecayProductTagger::HFdecayProductTagger(const edm::ParameterSet& cfg)
   : genParticlesToken_(consumes<reco::GenParticleCollection>(cfg.getParameter<edm::InputTag>("genParticles"))),
 	  tagBorC_(cfg.getParameter<bool>("tagBorC")){
 
-  produces<std::vector<pat::PackedGenParticle>>();
+  produces<std::vector<pat::PackedGenParticle>>("patPackedGenParticles");
+  produces<std::vector<reco::GenParticle>>("recoGenParticles");
   
 	}
 
@@ -91,6 +92,7 @@ void HFdecayProductTagger::produce(edm::StreamID, edm::Event &evt, const edm::Ev
 
   // Create output collection
   auto outputCollection = std::make_unique<std::vector<pat::PackedGenParticle>>();
+  auto outputCollectionReco = std::make_unique<std::vector<reco::GenParticle>>();
   //std::cout << "type of outputCollection: " << typeid(outputCollection).name() << std::endl;
 
   // Keep track of HF's
@@ -129,6 +131,7 @@ void HFdecayProductTagger::produce(edm::StreamID, edm::Event &evt, const edm::Ev
           pat::PackedGenParticle packedDaughter(daughter, reco::GenParticleRef());
           // std::cout << "packed daughter charge " << packedDaughter.charge() << " and status " << packedDaughter.status() << std::endl;
           outputCollection->push_back(packedDaughter);
+          outputCollectionReco->push_back(daughter);
         }
         // (*outputCollection).insert((*outputCollection).end(), daughterCollection.begin(), daughterCollection.end());
         hfCode += 100;
@@ -142,6 +145,7 @@ void HFdecayProductTagger::produce(edm::StreamID, edm::Event &evt, const edm::Ev
       // Add the rest of the particles			 
       pat::PackedGenParticle packedGenParticle(genPart, reco::GenParticleRef());
       outputCollection->push_back(packedGenParticle);
+      outputCollectionReco->push_back(genPart);
     } // end loop over particles
   } else {
 	  // Tag fromC's
@@ -157,6 +161,7 @@ void HFdecayProductTagger::produce(edm::StreamID, edm::Event &evt, const edm::Ev
         for (const reco::GenParticle daughter : daughterCollection){
           pat::PackedGenParticle packedDaughter(daughter, reco::GenParticleRef());
           outputCollection->push_back(packedDaughter);
+          outputCollectionReco->push_back(daughter);
         }
         // (*outputCollection).insert((*outputCollection).end(), daughterCollection.begin(), daughterCollection.end());
         hfCode += 100;
@@ -171,6 +176,7 @@ void HFdecayProductTagger::produce(edm::StreamID, edm::Event &evt, const edm::Ev
       // Add the rest of the particles			 
       pat::PackedGenParticle packedGenParticle(genPart, reco::GenParticleRef());
       outputCollection->push_back(packedGenParticle);
+      outputCollectionReco->push_back(genPart);
     } // end loop over particles
   } // end if tagBorC
   // std::cout << "nb of output particles in HFdecayProductTagger: " << (*outputCollection).size() << std::endl;
@@ -180,7 +186,8 @@ void HFdecayProductTagger::produce(edm::StreamID, edm::Event &evt, const edm::Ev
   //  if (particle.charge() != 0) counts++;
   // }
   // std::cout << "out oh which: " << counts << " charged" << std::endl;
-  evt.put(std::move(outputCollection));
+  evt.put(std::move(outputCollection), "patPackedGenParticles");
+  evt.put(std::move(outputCollectionReco), "recoGenParticles");
 }
 
 bool HFdecayProductTagger::isFinalB(const reco::Candidate &particle) const 
