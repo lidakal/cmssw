@@ -39,23 +39,24 @@ process.source = cms.Source("PoolSource",
         # "/store/himc/RunIISummer20UL17pp5TeVMiniAODv2/QCD_pThat-15_Dijet_TuneCP5_5p02TeV-pythia8/MINIAODSIM/106X_mc2017_realistic_forppRef5TeV_v3-v3/40000/7DC3DCCF-F5E0-C04B-ABD9-21E6631E185D.root"
         # "file:/data_CMS/cms/mnguyen//forLida/miniAOD_PAT_94X.root"
         # 'file:/home/llr/cms/kalipoliti/rootFiles/071C3B54-D788-DB4A-8FDD-FBCE0A911D55.root'
-        '/store/user/mnguyen/Herwig_CH3_bjet_5TeV/Herwig_CH3_bjet_5TeV_MINI_v7/240123_124848/0000/mini_PAT_1.root' # herwig bjet
+        # '/store/user/mnguyen/Herwig_CH3_bjet_5TeV/Herwig_CH3_bjet_5TeV_MINI_v7/240123_124848/0000/mini_PAT_1.root' # herwig bjet
         # '/store/user/mnguyen/Herwig_CH3_qcd/Herwig_CH3_qcd_MINIAOD/231017_075304/0000/recopat_RAW2DIGI_L1Reco_RECO_RECOSIM_EI_PAT_1.root' # herwig qcd
         # '/store/data/Run2017G/LowEGJet/MINIAOD/17Nov2017-v1/100000/0048A471-EE2D-E811-BB4D-0CC47AD98F70.root'
         # '/store/user/mnguyen/Herwig_CH3_qcd_5TeV/Herwig_CH3_qcd_5TeV_MINI_v7/240110_112918/0000/mini_PAT_1.root'
         # '/store/himc/RunIISummer20UL17pp5TeVMiniAODv2/QCD_pThat-15_Mujet_TuneCP5_5p02TeV-pythia8/MINIAODSIM/106X_mc2017_realistic_forppRef5TeV_v3-v2/2530000/098E0FF6-2717-EF4E-9E93-CC946DB97402.root'
         # 'file:/data_CMS/cms/mnguyen///mini_PAT.root'
         # fname
+        'file:/data_CMS/cms/kalipoliti/8B655CAA-8B9D-E04F-AE94-54227BD26D96.root'
         ),
     )
 
 # Select specific event
-# process.source.lumisToProcess = cms.untracked.VLuminosityBlockRange('1:7897')
-# process.source.eventsToProcess = cms.untracked.VEventRange('1:110394257')
+# process.source.lumisToProcess = cms.untracked.VLuminosityBlockRange('1:21907')
+# process.source.eventsToProcess = cms.untracked.VEventRange('1:21906437')
 
 # number of events to process, set to -1 to process all events
 process.maxEvents = cms.untracked.PSet(
-    input = cms.untracked.int32(-1)
+    input = cms.untracked.int32(1)
     )
 
 # Multi-thread 
@@ -81,9 +82,9 @@ process.GlobalTag.snapshotTime = cms.string("9999-12-31 23:59:59.000")
 
 process.GlobalTag.toGet.extend([
     cms.PSet(record = cms.string("BTagTrackProbability3DRcd"),
-             tag = cms.string("JPcalib_MC94X_2017pp_v2"),
-             connect = cms.string("frontier://FrontierProd/CMS_CONDITIONS")
-
+             tag = cms.string("JPcalib_MC94X_2017pp_v2"), # mc tag
+            # tag = cms.string("JPcalib_Data4MCSwap_94X_2017pp_v3"), # data tag for swap 
+            connect = cms.string("frontier://FrontierProd/CMS_CONDITIONS")
          )
       ])
 
@@ -174,7 +175,7 @@ process.forest = cms.Path(
     # process.trackSequencePbPb +
     # process.particleFlowAnalyser +
     process.hiEvtAnalyzer +
-    process.HiGenParticleAna +
+    # process.HiGenParticleAna + // for dN/deta checks
     # process.updatePATJetSequence + 
     process.tagInfoSequence +
     process.genJetSequence + 
@@ -282,10 +283,10 @@ if doDeclustering:
     taggedGenParticlesName_ = "HFdecayProductTagger"
     ## Produces a std::vector<pat::PackedGenParticle> named HFdecayProductTagger
 
-    process.ak4PFJetAnalyzer.genParticles = cms.untracked.InputTag(taggedGenParticlesName_)
+    process.ak4PFJetAnalyzer.genParticles = cms.untracked.InputTag(taggedGenParticlesName_, "patPackedGenParticles")
 
     process.bDecayAna = process.HiGenParticleAna.clone(
-        genParticleSrc = cms.InputTag(taggedGenParticlesName_),
+        genParticleSrc = cms.InputTag(taggedGenParticlesName_, "patPackedGenParticles"),
         useRefVector = cms.untracked.bool(False),
         partonMEOnly = cms.untracked.bool(False),
         chargedOnly = doChargedOnly,
@@ -299,7 +300,8 @@ if doDeclustering:
 
     process.load("RecoHI.HiJetAlgos.TrackToGenParticleMapProducer_cfi")
     process.TrackToGenParticleMapProducer.jetSrc = cms.InputTag("updatedPatJets")
-    process.TrackToGenParticleMapProducer.genParticleSrc = cms.InputTag(taggedGenParticlesName_)
+    process.TrackToGenParticleMapProducer.genParticleSrc = cms.InputTag(taggedGenParticlesName_, "patPackedGenParticles")
+    process.TrackToGenParticleMapProducer.chargedOnly = doChargedOnly
     process.genJetSequence += process.TrackToGenParticleMapProducer
     ## Creates the genConstitToGenParticleMap and trackToGenParticleMap
 

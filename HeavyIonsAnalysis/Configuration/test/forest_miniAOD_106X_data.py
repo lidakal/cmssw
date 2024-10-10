@@ -31,22 +31,23 @@ process.source = cms.Source("PoolSource",
         # '/store/data/Run2017G/SingleMuon/MINIAOD/UL2017_MiniAODv2-v1/30000/8A5CEA04-5852-CE47-AAF7-8C0B33A70FD3.root'
         # '/store/data/Run2017G/HighEGJet/MINIAOD/UL2017_MiniAODv2-v2/50000/2ECDBCF3-B35E-D24F-864B-62AAF9367181.root'
         'file:/data_CMS/cms/kalipoliti/HighEGJet/hardToOpenFile/2ECDBCF3-B35E-D24F-864B-62AAF9367181.root'
+        # '/store/data/Run2017G/LowEGJet/MINIAOD/UL2017_MiniAODv2-v2/70000/A91A9C86-5F50-D74E-ADAB-92A01E0C159B.root'
         ),
     )
 
 
 # Select specific event
-lostLumis = cms.untracked.VLuminosityBlockRange('306705:1062', '306705:1091', 
-                                                '306705:1101', '306705:1102',
-                                                '306777:1957', '306777:1961',
-                                                '306777:1965', '306777:1966',
-                                                '306777:1970', '306777:1971')
-process.source.lumisToProcess = lostLumis
+# lostLumis = cms.untracked.VLuminosityBlockRange('306705:1062', '306705:1091', 
+#                                                 '306705:1101', '306705:1102',
+#                                                 '306777:1957', '306777:1961',
+#                                                 '306777:1965', '306777:1966',
+#                                                 '306777:1970', '306777:1971')
+# process.source.lumisToProcess = lostLumis
 # process.source.eventsToProcess = cms.untracked.VEventRange('1:110394257')
 
 # number of events to process, set to -1 to process all events
 process.maxEvents = cms.untracked.PSet(
-    input = cms.untracked.int32(-1)
+    input = cms.untracked.int32(1)
     )
 
 # Multi-thread 
@@ -72,7 +73,8 @@ process.GlobalTag.snapshotTime = cms.string("9999-12-31 23:59:59.000")
 
 process.GlobalTag.toGet.extend([
     cms.PSet(record = cms.string("BTagTrackProbability3DRcd"),
-             tag = cms.string("JPcalib_Data94X_2017pp_v2"),
+             tag = cms.string("JPcalib_Data94X_2017pp_v2"), # data tag
+            #  tag = cms.string("JPcalib_MC94X_2017pp_v2"), # mc tag
              connect = cms.string("frontier://FrontierProd/CMS_CONDITIONS")
 
          )
@@ -267,15 +269,15 @@ if doDeclustering:
 #########################
     
 # muon jet selector for b tagging SF
-process.mujetSelector = cms.EDFilter("PatJetXSelector",
-                             src = cms.InputTag("slimmedJets"),
-                             offPV = cms.InputTag("offlineSlimmedPrimaryVertices"),
-                             cut = cms.string("pt > 5.0 && abs(rapidity()) < 3."),
-                             dummy = cms.bool(False)
-                         )
-process.recoJetSequence.insert(0, process.mujetSelector)
-process.akCs4PFJetAnalyzer.doMujets = cms.untracked.bool(True)
-process.akCs4PFJetAnalyzer.mujetTag = cms.InputTag("mujetSelector")
+# process.mujetSelector = cms.EDFilter("PatJetXSelector",
+#                              src = cms.InputTag("slimmedJets"),
+#                              offPV = cms.InputTag("offlineSlimmedPrimaryVertices"),
+#                              cut = cms.string("pt > 5.0 && abs(rapidity()) < 3."),
+#                              dummy = cms.bool(False)
+#                          )
+# process.recoJetSequence.insert(0, process.mujetSelector)
+# process.akCs4PFJetAnalyzer.doMujets = cms.untracked.bool(True)
+# process.akCs4PFJetAnalyzer.mujetTag = cms.InputTag("mujetSelector")
 
 #########################
 # Event Selection -> add the needed filters here
