@@ -32,6 +32,8 @@
 #include "CondFormats/DataRecord/interface/EcalTPGLutGroupRcd.h"
 #include "CondFormats/DataRecord/interface/EcalTPGPhysicsConstRcd.h"
 
+#include "CommonTools/UtilAlgos/interface/TFileService.h"//
+
 #include "CollHandle.h"
 
 #include <string>
@@ -50,7 +52,8 @@ class EcalSelectiveReadoutValidation : public DQMOneEDAnalyzer<> {
 public:
   /// Constructor
   EcalSelectiveReadoutValidation(const edm::ParameterSet& ps);
-
+  
+  edm::Service<TFileService> fs1;//
   /// Destructor
   ~EcalSelectiveReadoutValidation() override;
   void dqmBeginRun(edm::Run const&, edm::EventSetup const&) override;
@@ -363,6 +366,50 @@ private:
     if (me)
       me->Fill(x, y, z, w);
   }
+
+  void fill(TH1F* me, float x) {
+    if (me)
+      me->Fill(x);
+  }
+  void fill(TH1F* me, float x, float yw) {
+    if (me)
+      me->Fill(x, yw);
+  }
+
+
+
+  void fill(TH2F* me, float x, float yw) {
+    if (me)
+      me->Fill(x, yw);
+  }
+  void fill(TH2F* me, float x, float y, float zw) {
+    if (me)
+      me->Fill(x, y, zw);
+  }
+
+
+
+  void fill(TProfile* me, float x, float yw) {
+    if (me)
+      me->Fill(x, yw);
+  }
+  void fill(TProfile* me, float x, float y, float zw) {
+    if (me)
+      me->Fill(x, y, zw);
+  }
+
+
+
+
+  void fill(TProfile2D* me, float x, float y, float zw) {
+    if (me)
+      me->Fill(x, y, zw);
+  }
+  void fill(TProfile2D* me, float x, float y, float z, float w) {
+    if (me)
+      me->Fill(x, y, z, w);
+  }
+
   //@}
 
   void initAsciiFile();
@@ -539,42 +586,84 @@ private:
   //@{
   /** The histograms
    */
-  MonitorElement* meDccVol_;
-  MonitorElement* meDccLiVol_;
-  MonitorElement* meDccHiVol_;
-  MonitorElement* meDccVolFromData_;
-  MonitorElement* meVol_;
-  MonitorElement* meVolB_;
-  MonitorElement* meVolE_;
-  MonitorElement* meVolBLI_;
-  MonitorElement* meVolELI_;
-  MonitorElement* meVolLI_;
-  MonitorElement* meVolBHI_;
-  MonitorElement* meVolEHI_;
-  MonitorElement* meVolHI_;
-  MonitorElement* meChOcc_;
+  //MonitorElement* meDccVol_;
+  //MonitorElement* meDccLiVol_;
+  //MonitorElement* meDccHiVol_;
+  //MonitorElement* meDccVolFromData_;
 
-  MonitorElement* meTp_;
-  MonitorElement* meTtf_;
-  MonitorElement* meTtfVsTp_;
-  MonitorElement* meTtfVsEtSum_;
-  MonitorElement* meTpVsEtSum_;
+  TProfile* meDccVol_;
+  TProfile* meDccLiVol_;
+  TProfile* meDccHiVol_;
+  TProfile* meDccVolFromData_;
 
-  MonitorElement* meEbRecE_;
-  MonitorElement* meEbEMean_;
-  MonitorElement* meEbNoise_;
-  MonitorElement* meEbSimE_;
-  MonitorElement* meEbRecEHitXtal_;
-  MonitorElement* meEbRecVsSimE_;
-  MonitorElement* meEbNoZsRecVsSimE_;
+  TH1F* meDccVol20_;
+  TH1F* meDccVol5_;
 
-  MonitorElement* meEeRecE_;
-  MonitorElement* meEeEMean_;
-  MonitorElement* meEeNoise_;
-  MonitorElement* meEeSimE_;
-  MonitorElement* meEeRecEHitXtal_;
-  MonitorElement* meEeRecVsSimE_;
-  MonitorElement* meEeNoZsRecVsSimE_;
+  TH1F* meVol_;
+  TH1F* meVolB_;
+  TH1F* meVolE_;
+  TH1F* meVolBLI_;
+  TH1F* meVolELI_;
+  TH1F* meVolLI_;
+  TH1F* meVolBHI_;
+  TH1F* meVolEHI_;
+  TH1F* meVolHI_;
+  TProfile2D* meChOcc_;
+
+  //MonitorElement* meVol_;
+  //MonitorElement* meVolB_;
+  //MonitorElement* meVolE_;
+  //MonitorElement* meVolBLI_;
+  //MonitorElement* meVolELI_;
+  //MonitorElement* meVolLI_;
+  //MonitorElement* meVolBHI_;
+  //MonitorElement* meVolEHI_;
+  //MonitorElement* meVolHI_;
+  //MonitorElement* meChOcc_;
+
+  //MonitorElement* meTp_;
+  //MonitorElement* meTtf_;
+  //MonitorElement* meTtfVsTp_;
+  //MonitorElement* meTtfVsEtSum_;
+  //MonitorElement* meTpVsEtSum_;
+
+  TProfile* meTp_;
+  TProfile* meTtf_;
+  TH2F* meTtfVsTp_;
+  TH2F* meTtfVsEtSum_;
+  TH2F* meTpVsEtSum_;
+
+  //MonitorElement* meEbRecE_;
+  //MonitorElement* meEbEMean_;
+  //MonitorElement* meEbNoise_;
+  //MonitorElement* meEbSimE_;
+  //MonitorElement* meEbRecEHitXtal_;
+  //MonitorElement* meEbRecVsSimE_;
+  //MonitorElement* meEbNoZsRecVsSimE_;
+//
+  //MonitorElement* meEeRecE_;
+  //MonitorElement* meEeEMean_;
+  //MonitorElement* meEeNoise_;
+  //MonitorElement* meEeSimE_;
+  //MonitorElement* meEeRecEHitXtal_;
+  //MonitorElement* meEeRecVsSimE_;
+  //MonitorElement* meEeNoZsRecVsSimE_;
+
+  TH1F* meEbRecE_;
+  TProfile* meEbEMean_;
+  TH1F* meEbNoise_;
+  TH1F* meEbSimE_;
+  TH1F* meEbRecEHitXtal_;
+  TH2F* meEbRecVsSimE_;
+  TH2F* meEbNoZsRecVsSimE_;
+
+  TH1F* meEeRecE_;
+  TProfile* meEeEMean_;
+  TH1F* meEeNoise_;
+  TH1F* meEeSimE_;
+  TH1F* meEeRecEHitXtal_;
+  TH2F* meEeRecVsSimE_;
+  TH2F* meEeNoZsRecVsSimE_;
 
   MonitorElement* meFullRoRu_;
   MonitorElement* meZs1Ru_;
@@ -587,7 +676,8 @@ private:
 
   MonitorElement* meTpMap_;
 
-  MonitorElement* meFullRoCnt_;
+  TH1F* meFullRoCnt_; //
+  //MonitorElement* meFullRoCnt_;
   MonitorElement* meEbFullRoCnt_;
   MonitorElement* meEeFullRoCnt_;
 

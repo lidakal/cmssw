@@ -43,7 +43,7 @@ void LegacyIOHelper::save(std::string const &filename,
     // at endRun it might make sense to use this, to not save JOB histos yet.
     mes = dbe_->getAllContents(path, run, 0);
   }
-
+// std::cout<<"mes.size() = "<<mes.size()<<std::endl;
   for (auto me : mes) {
     // Modify dirname to comply with DQM GUI format. Change:
     // A/B/C/plot
@@ -63,7 +63,7 @@ void LegacyIOHelper::save(std::string const &filename,
     }
 
     std::string objectName = me->getName();
-
+    std::cout<<"objectName = "<<objectName<<std::endl;
     // Create dir if it doesn't exist and cd into it
     createDirectoryIfNeededAndCd(dirName);
 
@@ -74,6 +74,7 @@ void LegacyIOHelper::save(std::string const &filename,
       int value = me->getIntValue();
       std::string content = "<" + objectName + ">i=" + std::to_string(value) + "</" + objectName + ">";
       TObjString str(content.c_str());
+      str.Print("");
       str.Write();
     } else if (me->kind() == MonitorElement::Kind::REAL) {
       double value = me->getFloatValue();
@@ -82,20 +83,24 @@ void LegacyIOHelper::save(std::string const &filename,
       std::snprintf(buf, sizeof(buf), "%.*g", DBL_DIG + 2, value);
       std::string content = "<" + objectName + ">f=" + buf + "</" + objectName + ">";
       TObjString str(content.c_str());
+      str.Print("");
       str.Write();
     } else if (me->kind() == MonitorElement::Kind::STRING) {
       const std::string &value = me->getStringValue();
       std::string content = "<" + objectName + ">s=" + value + "</" + objectName + ">";
       TObjString str(content.c_str());
+      str.Print("");
       str.Write();
     } else {
       // Write a histogram
       TH1 *value = me->getTH1();
+      value->Print();
       value->Write();
 
       if (me->getEfficiencyFlag()) {
         std::string content = "<" + objectName + ">e=1</" + objectName + ">";
         TObjString str(content.c_str());
+        str.Print("");
         str.Write();
       }
 
@@ -109,6 +114,7 @@ void LegacyIOHelper::save(std::string const &filename,
         result += qr->getAlgorithm() + ':' + qr->getMessage();
         result += "</" + objectName + '.' + qr->getQRName() + '>';
         TObjString str(result.c_str());
+        str.Print("");
         str.Write();
       }
     }

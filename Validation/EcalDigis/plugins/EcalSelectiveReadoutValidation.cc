@@ -25,6 +25,7 @@
 
 #include "DataFormats/Common/interface/Handle.h"
 
+#include "CommonTools/UtilAlgos/interface/TFileService.h" //
 using namespace cms;
 using namespace edm;
 using namespace std;
@@ -546,7 +547,9 @@ void EcalSelectiveReadoutValidation::analyzeEE(const edm::Event& event, const ed
       for (int iY(0); iY < 20; iY++) {
         int GraphX = (iX + 1) + xOffset;
         int GraphY = (iY + 1);
+        //meZs1Ru_->Print();
         fill(meZs1Ru_, GraphX, GraphY, EEZs1RuCount[iZ][iX][iY]);
+        //std::cout<<"aaaaaa"<<endl;
         fill(meFullRoRu_, GraphX, GraphY, EEFullRuCount[iZ][iX][iY]);
         fill(meForcedRu_, GraphX, GraphY, EEForcedRuCount[iZ][iX][iY]);
       }
@@ -646,7 +649,10 @@ void EcalSelectiveReadoutValidation::analyzeEB(const edm::Event& event, const ed
     }
   }
 
+  int nEbDigi = 0;
+
   for (EBDigiCollection::const_iterator it = ebDigis_->begin(); it != ebDigis_->end(); ++it) {
+    ++nEbDigi;
     const EBDataFrame& frame = *it;
     int iEta = static_cast<const EBDetId&>(frame.id()).ieta();
     int iPhi = static_cast<const EBDetId&>(frame.id()).iphi();
@@ -729,6 +735,7 @@ void EcalSelectiveReadoutValidation::analyzeEB(const edm::Event& event, const ed
 
   if (!localReco_) {
     for (RecHitCollection::const_iterator it = ebRecHits_->begin(); it != ebRecHits_->end(); ++it) {
+      ++nEbDigi;
       const RecHit& hit = *it;
       int iEta = static_cast<const EBDetId&>(hit.id()).ieta();
       int iPhi = static_cast<const EBDetId&>(hit.id()).iphi();
@@ -853,6 +860,9 @@ void EcalSelectiveReadoutValidation::dqmEndRun(const edm::Run& r, const edm::Eve
   meL1aRate_->Fill(getL1aRate());
 }
 
+
+const int nDccs_new = 54;// Not sure why "'nDccs_' was not declared in this scope" after fix, so I add this.
+
 void EcalSelectiveReadoutValidation::bookHistograms(DQMStore::IBooker& ibooker,
                                                     edm::Run const&,
                                                     edm::EventSetup const&) {
@@ -863,39 +873,58 @@ void EcalSelectiveReadoutValidation::bookHistograms(DQMStore::IBooker& ibooker,
     meL1aRate_ = bookFloat(ibooker, "l1aRate_");
   }
 
-  meDccVol_ = bookProfile(ibooker,
+  meDccVol_ = fs1->make<TProfile>(
                           "hDccVol",  //"EcalDccEventSizeComputed",
                           "ECAL DCC event fragment size;Dcc id; "
                           "<Event size> (kB)",
-                          nDccs_,
+                          nDccs_new,//nDccs_,
                           .5,
-                          .5 + nDccs_);
-
-  meDccLiVol_ = bookProfile(ibooker,
+                          .5+nDccs_new//.5 + nDccs_
+                          );
+  meDccVol20_ = fs1->make<TH1F>(
+                          "hDccVol20",  //"EcalDccEventSizeComputed",
+                          "ECAL event size for DCC id = 20;<Event size> (kB); "
+                          "<Event size> (kB)",
+                          100,
+                          0,
+                          10.
+                          );
+  meDccVol5_ = fs1->make<TH1F>(
+                          "hDccVol5",  //"EcalDccEventSizeComputed",
+                          "ECAL event size for DCC id = 5;<Event size> (kB); "
+                          "<Event size> (kB)",
+                          100,
+                          0,
+                          10.
+                          );
+  meDccLiVol_ = fs1->make<TProfile>(
                             "hDccLiVol",
                             "LI channel payload per DCC;Dcc id; "
                             "<Event size> (kB)",
-                            nDccs_,
+                            nDccs_new,//nDccs_,
                             .5,
-                            .5 + nDccs_);
+                            .5+nDccs_new//.5 + nDccs_
+                            );
 
-  meDccHiVol_ = bookProfile(ibooker,
+  meDccHiVol_ = fs1->make<TProfile>(
                             "hDccHiVol",
                             "HI channel payload per DCC;Dcc id; "
                             "<Event size> (kB)",
-                            nDccs_,
+                            nDccs_new,//nDccs_,
                             .5,
-                            .5 + nDccs_);
+                            .5+nDccs_new//.5 + nDccs_
+                            );
 
-  meDccVolFromData_ = bookProfile(ibooker,
+  meDccVolFromData_ = fs1->make<TProfile>(
                                   "hDccVolFromData",  //"EcalDccEventSize",
                                   "ECAL DCC event fragment size;Dcc id; "
                                   "<Event size> (kB)",
-                                  nDccs_,
+                                  nDccs_new,//nDccs_,
                                   .5,
-                                  .5 + nDccs_);
+                                  .5+nDccs_new//.5 + nDccs_
+                                  );
 
-  meVolBLI_ = book1D(ibooker,
+  meVolBLI_ = fs1->make<TH1F>(
                      "hVolBLI",  // "EBLowInterestPayload",
                      "ECAL Barrel low interest crystal data payload;"
                      "Event size (kB);Nevts",
@@ -903,7 +932,7 @@ void EcalSelectiveReadoutValidation::bookHistograms(DQMStore::IBooker& ibooker,
                      0.,
                      200.);
 
-  meVolELI_ = book1D(ibooker,
+  meVolELI_ = fs1->make<TH1F>(
                      "hVolELI",  //"EELowInterestPayload",
                      "Endcap low interest crystal data payload;"
                      "Event size (kB);Nevts",
@@ -911,7 +940,7 @@ void EcalSelectiveReadoutValidation::bookHistograms(DQMStore::IBooker& ibooker,
                      0.,
                      200.);
 
-  meVolLI_ = book1D(ibooker,
+  meVolLI_ = fs1->make<TH1F>(
                     "hVolLI",  //"EcalLowInterestPayload",
                     "ECAL low interest crystal data payload;"
                     "Event size (kB);Nevts",
@@ -919,7 +948,7 @@ void EcalSelectiveReadoutValidation::bookHistograms(DQMStore::IBooker& ibooker,
                     0.,
                     200.);
 
-  meVolBHI_ = book1D(ibooker,
+  meVolBHI_ = fs1->make<TH1F>(
                      "hVolBHI",  //"EBHighInterestPayload",
                      "Barrel high interest crystal data payload;"
                      "Event size (kB);Nevts",
@@ -927,7 +956,7 @@ void EcalSelectiveReadoutValidation::bookHistograms(DQMStore::IBooker& ibooker,
                      0.,
                      200.);
 
-  meVolEHI_ = book1D(ibooker,
+  meVolEHI_ = fs1->make<TH1F>(
                      "hVolEHI",  //"EEHighInterestPayload",
                      "Endcap high interest crystal data payload;"
                      "Event size (kB);Nevts",
@@ -935,7 +964,7 @@ void EcalSelectiveReadoutValidation::bookHistograms(DQMStore::IBooker& ibooker,
                      0.,
                      200.);
 
-  meVolHI_ = book1D(ibooker,
+  meVolHI_ = fs1->make<TH1F>(
                     "hVolHI",  //"EcalHighInterestPayload",
                     "ECAL high interest crystal data payload;"
                     "Event size (kB);Nevts",
@@ -943,28 +972,28 @@ void EcalSelectiveReadoutValidation::bookHistograms(DQMStore::IBooker& ibooker,
                     0.,
                     200.);
 
-  meVolB_ = book1D(ibooker,
+  meVolB_ = fs1->make<TH1F>(
                    "hVolB",  //"EBEventSize",
                    "Barrel data volume;Event size (kB);Nevts",
                    100,
                    0.,
                    200.);
 
-  meVolE_ = book1D(ibooker,
+  meVolE_ = fs1->make<TH1F>(
                    "hVolE",  //"EEEventSize",
                    "Endcap data volume;Event size (kB);Nevts",
                    100,
                    0.,
                    200.);
 
-  meVol_ = book1D(ibooker,
+  meVol_ = fs1->make<TH1F>(
                   "hVol",  //"EcalEventSize",
                   "ECAL data volume;Event size (kB);Nevts",
                   100,
                   0.,
                   200.);
 
-  meChOcc_ = bookProfile2D(ibooker,
+  meChOcc_ = fs1->make<TProfile2D>(
                            "h2ChOcc",  //"EcalChannelOccupancy",
                            "ECAL crystal channel occupancy after zero suppression;"
                            "iX -200 / iEta / iX + 100;"
@@ -985,14 +1014,14 @@ void EcalSelectiveReadoutValidation::bookHistograms(DQMStore::IBooker& ibooker,
     tpUnit = string("TP hw unit");
   string title;
   title = string("Trigger primitive TT E_{T};E_{T} ") + tpUnit + string(";Event Count");
-  meTp_ = bookProfile(ibooker,
+  meTp_ = fs1->make<TProfile>(
                       "hTp",  //"EcalTriggerPrimitiveEt",
-                      title,
+                      title.c_str(),
                       (tpInGeV_ ? 100 : 40),
                       0.,
                       (tpInGeV_ ? 10. : 40.));
 
-  meTtf_ = bookProfile(ibooker,
+  meTtf_ = fs1->make<TProfile>(
                        "hTtf",  //"EcalTriggerTowerFlag",
                        "Trigger primitive TT flag;Flag number;Event count",
                        8,
@@ -1000,9 +1029,9 @@ void EcalSelectiveReadoutValidation::bookHistograms(DQMStore::IBooker& ibooker,
                        7.5);
 
   title = string("Trigger tower flag vs TP;E_{T}(TT) (") + tpUnit + string(");Flag number");
-  meTtfVsTp_ = book2D(ibooker, "h2TtfVsTp", title, 100, 0., (tpInGeV_ ? 10. : 40.), 8, -.5, 7.5);
+  meTtfVsTp_ = fs1->make<TH2F>( "h2TtfVsTp", title.c_str(), 100, 0., (tpInGeV_ ? 10. : 40.), 8, -.5, 7.5);
 
-  meTtfVsEtSum_ = book2D(ibooker,
+  meTtfVsEtSum_ = fs1->make<TH2F>(
                          "h2TtfVsEtSum",
                          "Trigger tower flag vs #sumE_{T};"
                          "E_{T}(TT) (GeV);"
@@ -1019,7 +1048,7 @@ void EcalSelectiveReadoutValidation::bookHistograms(DQMStore::IBooker& ibooker,
               "E_{T} (TP) (") +
           tpUnit + string(")");
 
-  meTpVsEtSum_ = book2D(ibooker, "h2TpVsEtSum", title, 100, 0., 10., 100, 0., (tpInGeV_ ? 10. : 40.));
+  meTpVsEtSum_ = fs1->make<TH2F>( "h2TpVsEtSum", title.c_str(), 100, 0., 10., 100, 0., (tpInGeV_ ? 10. : 40.));
 
   title = string(
               "Trigger primitive E_{T};"
@@ -1043,7 +1072,8 @@ void EcalSelectiveReadoutValidation::bookHistograms(DQMStore::IBooker& ibooker,
                        .5,
                        72.5);
 
-  meFullRoCnt_ = book1D(ibooker,
+
+  meFullRoCnt_ = fs1->make<TH1F>(
                         "hFROCnt",
                         "Number of Full-readout-flagged readout units;"
                         "FRO RU count;Event count",
@@ -1159,11 +1189,11 @@ void EcalSelectiveReadoutValidation::bookHistograms(DQMStore::IBooker& ibooker,
 
   const int evtMax = 500;
 
-  meEbRecE_ = book1D(ibooker, "hEbRecE", "Crystal reconstructed energy;E (GeV);Event count", 100, ebMinE, ebMaxE);
+  meEbRecE_ = fs1->make<TH1F>( "hEbRecE", "Crystal reconstructed energy;E (GeV);Event count", 100, ebMinE, ebMaxE);
 
-  meEbEMean_ = bookProfile(ibooker, "hEbEMean", "EE <E_hit>;event #;<E_hit> (GeV)", evtMax, .5, evtMax + .5);
+  meEbEMean_ = fs1->make<TProfile>( "hEbEMean", "EE <E_hit>;event #;<E_hit> (GeV)", evtMax, .5, evtMax + .5);
 
-  meEbNoise_ = book1D(ibooker,
+  meEbNoise_ = fs1->make<TH1F>(
                       "hEbNoise",
                       "Crystal noise "
                       "(rec E of crystal without deposited energy)"
@@ -1200,11 +1230,11 @@ void EcalSelectiveReadoutValidation::bookHistograms(DQMStore::IBooker& ibooker,
   //                                   "Event count",
   //                                   60, -30, 30);
 
-  meEbSimE_ = book1D(ibooker, "hEbSimE", "EB hit crystal simulated energy", 100, ebMinE, ebMaxE);
+  meEbSimE_ = fs1->make<TH1F>( "hEbSimE", "EB hit crystal simulated energy", 100, ebMinE, ebMaxE);
 
-  meEbRecEHitXtal_ = book1D(ibooker, "hEbRecEHitXtal", "EB rec energy of hit crystals", 100, ebMinE, ebMaxE);
+  meEbRecEHitXtal_ = fs1->make<TH1F>( "hEbRecEHitXtal", "EB rec energy of hit crystals", 100, ebMinE, ebMaxE);
 
-  meEbRecVsSimE_ = book2D(ibooker,
+  meEbRecVsSimE_ =fs1->make<TH2F>(
                           "hEbRecVsSimE",
                           "Crystal simulated vs reconstructed energy;"
                           "Esim (GeV);Erec GeV);Event count",
@@ -1215,7 +1245,7 @@ void EcalSelectiveReadoutValidation::bookHistograms(DQMStore::IBooker& ibooker,
                           ebMinE,
                           ebMaxE);
 
-  meEbNoZsRecVsSimE_ = book2D(ibooker,
+  meEbNoZsRecVsSimE_ = fs1->make<TH2F>(
                               "hEbNoZsRecVsSimE",
                               "Crystal no-zs simulated vs reconstructed "
                               "energy;"
@@ -1227,7 +1257,7 @@ void EcalSelectiveReadoutValidation::bookHistograms(DQMStore::IBooker& ibooker,
                               ebMinE,
                               ebMaxE);
 
-  meEeRecE_ = book1D(ibooker,
+  meEeRecE_ = fs1->make<TH1F>(
                      "hEeRecE",
                      "EE crystal reconstructed energy;E (GeV);"
                      "Event count",
@@ -1235,9 +1265,9 @@ void EcalSelectiveReadoutValidation::bookHistograms(DQMStore::IBooker& ibooker,
                      eeMinE,
                      eeMaxE);
 
-  meEeEMean_ = bookProfile(ibooker, "hEeEMean", "<E_{EE hit}>;event;<E_{hit}> (GeV)", evtMax, .5, evtMax + .5);
+  meEeEMean_ = fs1->make<TProfile>( "hEeEMean", "<E_{EE hit}>;event;<E_{hit}> (GeV)", evtMax, .5, evtMax + .5);
 
-  meEeNoise_ = book1D(ibooker,
+  meEeNoise_ = fs1->make<TH1F>(
                       "hEeNoise",
                       "EE crystal noise "
                       "(rec E of crystal without deposited energy);"
@@ -1274,11 +1304,11 @@ void EcalSelectiveReadoutValidation::bookHistograms(DQMStore::IBooker& ibooker,
   //                                     "Event count",
   //                                     60, -30, 30);
 
-  meEeSimE_ = book1D(ibooker, "hEeSimE", "EE hit crystal simulated energy", 100, eeMinE, eeMaxE);
+  meEeSimE_ = fs1->make<TH1F>( "hEeSimE", "EE hit crystal simulated energy", 100, eeMinE, eeMaxE);
 
-  meEeRecEHitXtal_ = book1D(ibooker, "hEeRecEHitXtal", "EE rec energy of hit crystals", 100, eeMinE, eeMaxE);
+  meEeRecEHitXtal_ = fs1->make<TH1F>( "hEeRecEHitXtal", "EE rec energy of hit crystals", 100, eeMinE, eeMaxE);
 
-  meEeRecVsSimE_ = book2D(ibooker,
+  meEeRecVsSimE_ = fs1->make<TH2F>(
                           "hEeRecVsSimE",
                           "EE crystal simulated vs reconstructed energy;"
                           "Esim (GeV);Erec GeV);Event count",
@@ -1289,7 +1319,7 @@ void EcalSelectiveReadoutValidation::bookHistograms(DQMStore::IBooker& ibooker,
                           eeMinE,
                           eeMaxE);
 
-  meEeNoZsRecVsSimE_ = book2D(ibooker,
+  meEeNoZsRecVsSimE_ = fs1->make<TH2F>(
                               "hEeNoZsRecVsSimE",
                               "EE crystal no-zs simulated vs "
                               "reconstructed "
@@ -1553,7 +1583,8 @@ void EcalSelectiveReadoutValidation::analyzeTP(edm::Event const& event, edm::Eve
     int iPhi0 = iTtPhi2cIndex(iPhi);
     double etSum = ttEtSums[iEta0][iPhi0];
 
-    int iE = meTp_->getTProfile()->FindFixBin(tpEt);
+    //int iE = meTp_->getTProfile()->FindFixBin(tpEt);
+    int iE = meTp_->FindFixBin(tpEt);
     if ((iE >= 0) && (iE < 100)) {
       ++tpEtCount[iE];
     } else {
@@ -1626,6 +1657,8 @@ void EcalSelectiveReadoutValidation::analyzeDataVolume(const Event& e, const Eve
   //histos
   for (unsigned iDcc0 = 0; iDcc0 < nDccs_; ++iDcc0) {
     fill(meDccVol_, iDcc0 + 1, getDccEventSize(iDcc0, nPerDcc_[iDcc0]) / kByte_);
+    if(iDcc0 == 5) fill(meDccVol5_, getDccEventSize(iDcc0, nPerDcc_[iDcc0]) / kByte_);
+    if(iDcc0 == 20) fill(meDccVol20_, getDccEventSize(iDcc0, nPerDcc_[iDcc0]) / kByte_);
     fill(meDccLiVol_, iDcc0 + 1, getDccSrDependentPayload(iDcc0, nLiRuPerDcc_[iDcc0], nLiPerDcc_[iDcc0]) / kByte_);
     fill(meDccHiVol_, iDcc0 + 1, getDccSrDependentPayload(iDcc0, nHiRuPerDcc_[iDcc0], nHiPerDcc_[iDcc0]) / kByte_);
     const FEDRawDataCollection& raw = *fedRaw_;
