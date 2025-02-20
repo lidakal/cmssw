@@ -24,6 +24,7 @@
 #include "JetMETCorrections/Modules/interface/JetResolution.h"
 #include "CondFormats/JetMETObjects/interface/JetCorrectionUncertainty.h"
 #include "TRandom.h"
+#include "CommonTools/MVAUtils/interface/TMVAEvaluator.h"
 
 using namespace std;
 using namespace edm;
@@ -86,6 +87,27 @@ HiInclusiveJetAnalyzer::HiInclusiveJetAnalyzer(const edm::ParameterSet& iConfig)
   jetAbsEtaMax_ = iConfig.getUntrackedParameter<double>("jetAbsEtaMax", 5.1);
 
   doJetTrueFlavour_ = iConfig.getUntrackedParameter<bool>("doJetTrueFlavour",true);
+
+  // get correct JEC file 
+  // if (isMC_) {
+  //   l1Par = new JetCorrectorParameters(l1fj_mc.fullPath());
+  //   l2Par = new JetCorrectorParameters(l2rel_mc.fullPath());
+  //   l3Par = new JetCorrectorParameters(l3abs_mc.fullPath());
+  //   resPar = new JetCorrectorParameters(l2l3res_mc.fullPath());   
+  // } else {
+  //   l1Par = new JetCorrectorParameters(l1fj_data.fullPath());
+  //   l2Par = new JetCorrectorParameters(l2rel_data.fullPath());
+  //   l3Par = new JetCorrectorParameters(l3abs_data.fullPath());
+  //   resPar = new JetCorrectorParameters(l2l3res_data.fullPath());   
+  // }
+  // vector<JetCorrectorParameters> vPar;
+  // vPar.push_back(*l1Par);
+  // vPar.push_back(*l2Par);
+  // vPar.push_back(*l3Par);
+  // vPar.push_back(*resPar);
+
+  // JetCorrector = new FactorizedJetCorrector(vPar); // initialized
+
 
   if (isMC_) {
     genjetTag_ = consumes<edm::View<reco::GenJet>>(iConfig.getParameter<InputTag>("genjetTag"));
@@ -153,6 +175,7 @@ HiInclusiveJetAnalyzer::HiInclusiveJetAnalyzer(const edm::ParameterSet& iConfig)
       droppedTracksToken_ = consumes<edm::View<reco::PFCandidate>>(iConfig.getUntrackedParameter<edm::InputTag>("droppedTracks", edm::InputTag("dynGroomedPFJets", "droppedTracks")));
       // std::cout << "Token is initialized " << std::endl;
     }
+    tmva_path_ = iConfig.getUntrackedParameter<edm::FileInPath>("tmva_path", edm::FileInPath("RecoHI/HiJetAlgos/data/TMVAClassification_BDTG.weights.xml"));
   }
 
   // [DEBUG]
@@ -356,6 +379,7 @@ void HiInclusiveJetAnalyzer::beginJob() {
     t->Branch("trkDz", jets_.trkDz, "trkDz[ntrk]/F");
     t->Branch("trkPdgId", jets_.trkPdgId, "trkPdgId[ntrk]/I");
     t->Branch("trkMatchSta", jets_.trkMatchSta, "trkMatchSta[ntrk]/I");
+    t->Branch("trkBdtScore", jets_.trkBdtScore, "trkBdtScore[ntrk]/F");
 
     t->Branch("jtptCh", jets_.jtptCh, "jtptCh[nref]/F");
     if (isMC_) {
@@ -566,6 +590,8 @@ void HiInclusiveJetAnalyzer::beginJob() {
         t->Branch("jtNcHad", jets_.jtNcHad, "jtNcHad[nref]/I");
         t->Branch("jtNbPar", jets_.jtNbPar, "jtNbPar[nref]/I");
         t->Branch("jtNcPar", jets_.jtNcPar, "jtNcPar[nref]/I");
+        t->Branch("jtHasGSPB",jets_.jtHasGSPB,"jtHasGSPB[nref]/O");
+        t->Branch("jtHasGSPC",jets_.jtHasGSPC,"jtHasGSPC[nref]/O");
       }
     }
   }
@@ -642,6 +668,7 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
 
   edm::Handle<edm::View<reco::PFCandidate>> droppedTracks; // pointer to container of pointers
   edm::Handle<reco::TrackToGenParticleMap> trackToGenParticleMap;
+  std::unique_ptr<TMVAEvaluator> tmvaTagger;
   if (doTracks_) {
     if (isMC_) {
       iEvent.getByToken(trackToGenParticleMapToken_, trackToGenParticleMap);
@@ -649,6 +676,22 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
       iEvent.getByToken(droppedTracksToken_, droppedTracks);
       // std::cout << "after getByToken, ndroppedTracks=" << droppedTracks->size() << std::endl;
     }
+    // edm::FileInPath tmva_path_ = edm::FileInPath("RecoHI/HiJetAlgos/data/TMVAClassification_BDTG.weights.xml");
+    std::vector<std::string> tmva_variable_names_ = {
+      "trkIp3dSig", "trkIp2dSig", "trkDistToAxis",
+      "svtxdls", "svtxdls2d", "svtxm", "svtxmcorr",
+      "svtxnormchi2", "svtxNtrk", "svtxTrkPtOverSv",
+      "jtpt"
+    };
+    std::vector<std::string> tmva_spectator_names_ = {};
+    tmvaTagger = std::make_unique<TMVAEvaluator>();
+    tmvaTagger->initialize("Color:Silent:Error",
+                            "BDTG",
+                            tmva_path_.fullPath(),
+                            tmva_variable_names_,
+                            tmva_spectator_names_,
+                            false,
+                            false);
   }
 
   edm::Handle<edm::View<pat::PackedCandidate>> pfCandidates;
@@ -877,6 +920,9 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
         double svtxM = svtx.p4().mass();
         double svtxPt = svtx.p4().pt();
         double normalizedChi2 = svtx.vertexNormalizedChi2();
+        // if (normalizedChi2<0) std::cout << normalizedChi2 << std::endl;
+        // if (normalizedChi2<0) std::cout << svtx.vertexChi2() << std::endl;
+        // if (normalizedChi2<0) std::cout << svtx.vertexNdof() << std::endl;
 
         //mCorr=srqt(m^2+p^2sin^2(th)) + p*sin(th)
         double sinth = svtx.p4().Vect().Unit().Cross((svTagInfo->flightDirection(isv)).unit()).Mag2();
@@ -1032,6 +1078,36 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
         } else {
           jets_.trkDz[ijetTrack] = -100000.;
         }
+
+        // Add BDT score 
+        std::map<std::string, float> inputs;
+        inputs["trkIp3dSig"] = jets_.trkIp3dSig[ijetTrack];
+        inputs["trkIp2dSig"] = jets_.trkIp2dSig[ijetTrack];
+        inputs["trkDistToAxis"] = jets_.trkDistToAxis[ijetTrack];
+        if (jets_.trkSvtxId[ijetTrack]>=0) {
+          int isv = jets_.trkSvtxId[ijetTrack];
+          inputs["svtxdls"] = jets_.svtxdls[isv];
+          inputs["svtxdls2d"] = jets_.svtxdls2d[isv];
+          inputs["svtxm"] = jets_.svtxm[isv];
+          inputs["svtxmcorr"] = jets_.svtxmcorr[isv];
+          inputs["svtxnormchi2"] = jets_.svtxnormchi2[isv];
+          inputs["svtxNtrk"] = jets_.svtxNtrk[isv];
+          inputs["svtxTrkPtOverSv"] = jets_.svtxpt[isv]/jets_.jtpt[jets_.nref];
+        } else {
+          const double missing_value = -1000000.;
+          inputs["svtxdls"] = missing_value;
+          inputs["svtxdls2d"] = missing_value;
+          inputs["svtxm"] = missing_value;
+          inputs["svtxmcorr"] = missing_value;
+          inputs["svtxnormchi2"] = missing_value;
+          inputs["svtxNtrk"] = missing_value;
+          inputs["svtxTrkPtOverSv"] = missing_value;
+        }
+        inputs["jtpt"] = jets_.jtpt[jets_.nref];
+
+        float prediction = -99.;
+        prediction = tmvaTagger->evaluate(inputs);
+        jets_.trkBdtScore[ijetTrack] = prediction;
 
         jets_.jtNtrk[jets_.nref]++;
       } // jet constituent loop
@@ -1193,6 +1269,22 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
       }
     }
 
+    // ------------ Re-apply JEC --------------------------
+    // double rawpt = jet.correctedJet("Uncorrected").pt();
+    // double jteta = jet.eta();
+    // double jtphi = jet.phi();
+    // double jtarea = jet.jetArea();
+    // double rho_temp = (float) *rho;
+
+    // JetCorrector->setJetPt(rawpt); 
+    // JetCorrector->setJetEta(jteta);
+    // JetCorrector->setJetA(jtarea);
+    // JetCorrector->setRho(rho_temp);
+    
+    // double newCorrection = JetCorrector->getCorrection();
+    // -----------------------------------------------------
+
+    
     jets_.rawpt[jets_.nref] = jet.correctedJet("Uncorrected").pt();
     jets_.jtpt[jets_.nref] = jet.pt();
     // std::cout << "uncorrected = " << jets_.rawpt[jets_.nref] << ", corrected = " << jets_.jtpt[jets_.nref] << std::endl;
@@ -1306,6 +1398,10 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
           //           << std::endl;
           int iGroomedGenJet = getGroomedJetIndex(*genJet, *groomedGenJets);
           // int iGroomedGenJet = -1;
+          // std::cout << Form("genJet in ntuple i=%d: pt=%f, eta=%f, phi=%f", jets_.nref, genJet->pt() , genJet->eta() , genJet->phi() ) 
+          //   << " matched to i = " << iGroomedGenJet << " w/ pt = " << (*groomedGenJets)[iGroomedGenJet].pt()
+          //   << std::endl;
+      
           // std::cout << "groomed jets type: " << typeid(*groomedGenJets).name() << std::endl;
           if (iGroomedGenJet > -1) {
             const reco::Jet& groomedGenJet = (*groomedGenJets)[iGroomedGenJet];
@@ -1348,6 +1444,7 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
               jets_.rsjt1Eta[jets_.nref] = -999;
               jets_.rsjt1Phi[jets_.nref] = -999;
             }   
+            // std::cout << "pseudoHFGenCollection->size()=" << pseudoHFGenCollection->size() << std::endl;
             if (pseudoHFGenCollection->size() > 0) {
               // std::cout << "in pseudoHFGenCollection" << std::endl;
               reco::PFCandidate pseudoBGen = (*pseudoHFGenCollection)[iGroomedGenJet];
@@ -1375,6 +1472,8 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
             isNeutrino &= (genConstit->pdgId() == 16); // nutau
             isNeutrino &= (genConstit->pdgId() == 18); // nutau'
             if (isNeutrino) continue;
+
+            // std::cout << "genConstit pt=" << genConstit->pt() << std::endl;
 
             reco::Candidate::PolarLorentzVector constitV(0., 0., 0., 0.);
             constitV.SetPt(genConstit->pt());
@@ -1547,7 +1646,7 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
 
       // Get JEC uncertainty
       JetCorrectionUncertainty *jecUnc;
-      jecUnc = new JetCorrectionUncertainty(edm::FileInPath("HeavyIonsAnalysis/JetAnalysis/data/Summer19UL17_V5_MC_Uncertainty_AK4PFchs.txt").fullPath());
+      jecUnc = new JetCorrectionUncertainty(edm::FileInPath("HeavyIonsAnalysis/JetAnalysis/data/Summer19UL17_V6_MC_Uncertainty_AK4PFchs.txt").fullPath());
       // std::cout << "created the jec unc object" << std::endl;
       jecUnc->setJetEta(jets_.jteta[jets_.nref]);
       jecUnc->setJetPt(jets_.jtpt[jets_.nref]);
@@ -1558,17 +1657,16 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
 
       jets_.refparton_flavorForB[jets_.nref] = jet.partonFlavour();
 
-      //      if(jet.genParton()){
-      // // matched partons
-      // const reco::GenParticle & parton = *jet.genParton();
+      if(jet.genParton()){
+        // matched partons
+        const reco::GenParticle & parton = *jet.genParton();
 
-      // jets_.refparton_pt[jets_.nref] = parton.pt();
-      // jets_.refparton_flavor[jets_.nref] = parton.pdgId();
-
-      //      } else {
-      jets_.refparton_pt[jets_.nref] = -999;
-      jets_.refparton_flavor[jets_.nref] = -999;
-      //      }
+        jets_.refparton_pt[jets_.nref] = parton.pt();
+        jets_.refparton_flavor[jets_.nref] = parton.pdgId();
+      } else {
+        jets_.refparton_pt[jets_.nref] = -999;
+        jets_.refparton_flavor[jets_.nref] = -999;
+      }
 
       if (doJetTrueFlavour_) {
         jets_.jtHadFlav[jets_.nref] = jet.hadronFlavour();
@@ -1578,7 +1676,10 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
         jets_.jtParFlav[jets_.nref] = -1;
       }
 
-      // bool foundMatch = false;
+      int nb=0;
+      int nc=0;
+      bool hasBfromGSP = false;
+      bool hasCfromGSP = false;
       for (const JetFlavourInfoMatching& jetFlavourInfoMatching : *jetFlavourInfos) {
         if (deltaR(jet.p4(), jetFlavourInfoMatching.first->p4()) < 1e-6) {
           JetFlavourInfo jetInfo = jetFlavourInfoMatching.second;
@@ -1588,36 +1689,31 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
           jets_.jtNbHad[jets_.nref] = bHadronsInJet.size();
           jets_.jtNcHad[jets_.nref] = cHadronsInJet.size();
 
-          const GenParticleRefVector &partonsInJet = jetInfo.getPartons();
+          std::cout << "new jet" << std::endl;
 
-          int nb=0;
-          int nc=0;
-          // bool hasBfromGSP = false;
-          // bool hasCfromGSP = false;
-
+          const GenParticleRefVector &partonsInJet = jetInfo.getPartons(); // not present in the PAT jet, need the jetFlavourInfos
           for (GenParticleRefVector::const_iterator it = partonsInJet.begin(); it != partonsInJet.end(); ++it) {
             int parFlav = (*it)->pdgId();
-            // const Candidate* c = (*it).get();
+            const Candidate* c = (*it).get();
+
+            std::cout << "\tparFlav=" << parFlav << ", status=" << (*it)->status() << std::endl;
 
             if(abs(parFlav)==5){
               nb++;
-              // if(isFromGSP(c)) hasBfromGSP = true;
+              if(isFromGSP(c)) hasBfromGSP = true;
             }
             else if(abs(parFlav)==4){
               nc++;
-              // if(isFromGSP(c)) hasCfromGSP = true;
+              if(isFromGSP(c)) hasCfromGSP = true;
             }
           }
-
-          jets_.jtNbPar[jets_.nref] = nb;
-          jets_.jtNcPar[jets_.nref] = nc;
-          // jets_.jtHasGSPB[jets_.nref] = hasBfromGSP;
-          // jets_.jtHasGSPC[jets_.nref] = hasCfromGSP;
-
-          // foundMatch = true;
-          break;
         }
-      } // end loop over flavour info
+      }
+
+      jets_.jtNbPar[jets_.nref] = nb;
+      jets_.jtNcPar[jets_.nref] = nc;
+      jets_.jtHasGSPB[jets_.nref] = hasBfromGSP;
+      jets_.jtHasGSPC[jets_.nref] = hasCfromGSP;
     } // endif isMC 
     jets_.nref++;
   } // jet loop
@@ -1831,7 +1927,10 @@ int HiInclusiveJetAnalyzer::getGroomedJetIndex(const jetType& jet, const edm::Vi
   for (unsigned int i = 0; i < groomedJetsV.size(); ++i) {
     const reco::Jet& mjet = groomedJetsV[i];
 
+    // std::cout << Form("i=%d: pt=%f, eta=%f, phi=%f", i, mjet.pt(), mjet.eta(), mjet.phi()) << std::endl;
+
     double dr = deltaR(jet, mjet);
+    // std::cout << "dr=" << dr << ", drmin=" << drMin << std::endl;
     if (dr < drMin) {
       imatch = i;
       drMin = dr;
@@ -2009,6 +2108,35 @@ int HiInclusiveJetAnalyzer::trkGenPartMatch(reco::Jet::Constituent constituent, 
   }
   //cout << "dRmin: " << dRmin << endl;
   return status;  
+}
+
+// from BTagAnalyzer
+bool HiInclusiveJetAnalyzer::isFromGSP(const Candidate* c)
+{  
+  bool isFromGSP = false;
+  
+  if( c->numberOfMothers() == 1 ) {
+    const Candidate* dau = c;
+    const Candidate* mom = c->mother();
+    while( dau->numberOfMothers() == 1 && !( isHardProcess(mom->status()) && (abs(mom->pdgId())==4 || abs(mom->pdgId())==5) ) ) {
+      if( mom->pdgId()==21 )
+	{
+	  isFromGSP = 1;
+	  break;
+	}
+      dau = mom;
+      mom = dau->mother();
+    }
+  }
+  
+  return isFromGSP;
+}
+
+bool HiInclusiveJetAnalyzer::isHardProcess(const int status)
+{
+  // assumes Pythia8
+  if( status>=21 && status<=29 ) return true;
+  return false;
 }
 
 DEFINE_FWK_MODULE(HiInclusiveJetAnalyzer);
