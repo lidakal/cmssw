@@ -29,6 +29,9 @@
 #include "SimDataFormats/JetMatching/interface/JetFlavourInfo.h"
 #include "SimDataFormats/JetMatching/interface/JetFlavourInfoMatching.h"
 
+#include "CondFormats/JetMETObjects/interface/JetCorrectorParameters.h"
+#include "CondFormats/JetMETObjects/interface/FactorizedJetCorrector.h"
+
 
 /**\class HiInclusiveJetAnalyzer
 
@@ -113,9 +116,31 @@ private:
   // b and c hadrons
   edm::EDGetTokenT<reco::JetFlavourInfoMatchingCollection> jetFlavourInfosToken_;
 
+  bool isFromGSP(const reco::Candidate* c);
+  bool isHardProcess(const int);
+  // JEC 
+  // edm::FileInPath l1fj_mc = edm::FileInPath("HeavyIonsAnalysis/JetAnalysis/data/Summer19UL17_V6_MC_L1FastJet_AK4PFchs.txt");
+  // edm::FileInPath l2rel_mc = edm::FileInPath("HeavyIonsAnalysis/JetAnalysis/data/Summer19UL17_V6_MC_L2Relative_AK4PFchs.txt");
+  // edm::FileInPath l3abs_mc = edm::FileInPath("HeavyIonsAnalysis/JetAnalysis/data/Summer19UL17_V6_MC_L3Absolute_AK4PFchs.txt");
+  // edm::FileInPath l2l3res_mc = edm::FileInPath("HeavyIonsAnalysis/JetAnalysis/data/Summer19UL17_V6_MC_L2L3Residual_AK4PFchs.txt"); // dummy
+
+  // edm::FileInPath l1fj_data = edm::FileInPath("HeavyIonsAnalysis/JetAnalysis/data/Summer19UL17_RunF_V6_DATA_L1FastJet_AK4PFchs.txt");
+  // edm::FileInPath l2rel_data = edm::FileInPath("HeavyIonsAnalysis/JetAnalysis/data/Summer19UL17_RunF_V6_DATA_L2Relative_AK4PFchs.txt");
+  // edm::FileInPath l3abs_data = edm::FileInPath("HeavyIonsAnalysis/JetAnalysis/data/Summer19UL17_RunF_V6_DATA_L3Absolute_AK4PFchs.txt");
+  // edm::FileInPath l2l3res_data = edm::FileInPath("HeavyIonsAnalysis/JetAnalysis/data/Summer19UL17_RunF_V6_DATA_L2L3Residual_AK4PFchs.txt"); 
+
+  // JetCorrectorParameters *l1Par;
+  // JetCorrectorParameters *l2Par;
+  // JetCorrectorParameters *l3Par;
+  // JetCorrectorParameters *resPar;
+  // FactorizedJetCorrector *JetCorrector; // initialize in constructor
+
   // [DEBUG]
   edm::EDGetTokenT<std::vector<reco::Vertex>> primaryVerticesToken_;
   edm::Handle<std::vector<reco::Vertex>> primaryVertices;
+
+  // test
+  edm::FileInPath tmva_path_;
 
   bool doMatch_;
   bool useVtx_;
@@ -200,6 +225,8 @@ private:
     int jtNcHad[MAXJETS]={0};
     int jtNbPar[MAXJETS]={0};
     int jtNcPar[MAXJETS]={0};
+    bool jtHasGSPB[MAXJETS];
+    bool jtHasGSPC[MAXJETS];
 
     // jet aggregated pseudo-B
     float jtmB[MAXJETS]={0};
@@ -442,6 +469,8 @@ private:
     float trkDz[MAXTRACKS]={0};
     int trkPdgId[MAXTRACKS]={0};
     int trkMatchSta[MAXTRACKS]={0};
+    int trkMatchPdgId[MAXTRACKS]={0};
+    float trkBdtScore[MAXTRACKS]={0};
 
     float trackPtRel[MAXTRACKS]={0};
     float trackPtRatio[MAXTRACKS]={0};

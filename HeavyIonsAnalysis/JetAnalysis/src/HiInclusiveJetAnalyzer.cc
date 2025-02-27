@@ -379,6 +379,7 @@ void HiInclusiveJetAnalyzer::beginJob() {
     t->Branch("trkDz", jets_.trkDz, "trkDz[ntrk]/F");
     t->Branch("trkPdgId", jets_.trkPdgId, "trkPdgId[ntrk]/I");
     t->Branch("trkMatchSta", jets_.trkMatchSta, "trkMatchSta[ntrk]/I");
+    t->Branch("trkMatchPdgId", jets_.trkMatchPdgId, "trkMatchPdgId[ntrk]/I");
     t->Branch("trkBdtScore", jets_.trkBdtScore, "trkBdtScore[ntrk]/F");
 
     t->Branch("jtptCh", jets_.jtptCh, "jtptCh[nref]/F");
@@ -1063,11 +1064,14 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
         } // end doSvtx_
 
         Int_t status = -1; // default, no match
+        Int_t pdg = -1; // default, no match
         if (isMC_ && trackToGenParticleMap->find(constit) != trackToGenParticleMap->end()) { 
           edm::Ptr<pat::PackedGenParticle> matchGenParticle = trackToGenParticleMap->at(constit);
           status = matchGenParticle->status();
+          pdg = matchGenParticle->pdgId();
         }
         jets_.trkMatchSta[ijetTrack] = status;
+        jets_.trkMatchPdgId[ijetTrack] = pdg;
         jets_.trkPdgId[ijetTrack] = constit->pdgId();
 
         const reco::Track *constitTrack = constit->bestTrack();
@@ -1320,8 +1324,8 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
 
     if (doSubJets_)
       analyzeSubjets(jet);
-
-    if (doSubJetsNew_) {
+        // std::cout << "new jet pt=" << jet.pt() << std::endl;
+      if (doSubJetsNew_) {
       int iGroomedJet = getGroomedJetIndex(jet, *groomedJets);
       if (iGroomedJet > -1) {
         const reco::Jet& groomedJet = (*groomedJets)[iGroomedJet];
@@ -1689,14 +1693,14 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
           jets_.jtNbHad[jets_.nref] = bHadronsInJet.size();
           jets_.jtNcHad[jets_.nref] = cHadronsInJet.size();
 
-          std::cout << "new jet" << std::endl;
+        //   std::cout << "new jet" << std::endl;
 
           const GenParticleRefVector &partonsInJet = jetInfo.getPartons(); // not present in the PAT jet, need the jetFlavourInfos
           for (GenParticleRefVector::const_iterator it = partonsInJet.begin(); it != partonsInJet.end(); ++it) {
             int parFlav = (*it)->pdgId();
             const Candidate* c = (*it).get();
 
-            std::cout << "\tparFlav=" << parFlav << ", status=" << (*it)->status() << std::endl;
+            // std::cout << "\tparFlav=" << parFlav << ", status=" << (*it)->status() << std::endl;
 
             if(abs(parFlav)==5){
               nb++;
