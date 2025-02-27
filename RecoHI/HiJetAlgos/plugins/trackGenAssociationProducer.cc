@@ -118,7 +118,6 @@ void trackGenAssociationProducer::produce(edm::StreamID, edm::Event &evt, const 
   std::unique_ptr<MapType> trackGenMap = std::make_unique<MapType>(pfCandidates, genParticles);
  
   // Go over the charged PF candidates
-  int countCharged = 0;
   for (size_t icand = 0; icand < pfCandidates->size(); icand++) {
     const pat::PackedCandidate& pfCand = pfCandidates->at(icand);
     if (pfCand.charge() == 0) continue;
@@ -150,7 +149,6 @@ void trackGenAssociationProducer::produce(edm::StreamID, edm::Event &evt, const 
 
       trackGenMap->insert(pfCandRef, matchedGenParticleRef);
     }  
-    countCharged++;
   }  
   evt.put(std::move(trackGenMap));
 }
