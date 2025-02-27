@@ -46,17 +46,18 @@ process.source = cms.Source("PoolSource",
         # '/store/himc/RunIISummer20UL17pp5TeVMiniAODv2/QCD_pThat-15_Mujet_TuneCP5_5p02TeV-pythia8/MINIAODSIM/106X_mc2017_realistic_forppRef5TeV_v3-v2/2530000/098E0FF6-2717-EF4E-9E93-CC946DB97402.root'
         # 'file:/data_CMS/cms/mnguyen///mini_PAT.root'
         # fname
-        'file:/data_CMS/cms/kalipoliti/8B655CAA-8B9D-E04F-AE94-54227BD26D96.root'
+        # 'file:/data_CMS/cms/kalipoliti/8B655CAA-8B9D-E04F-AE94-54227BD26D96.root'
+        '/store/himc/RunIISummer20UL17pp5TeVMiniAODv2/QCD_pThat-15_bJet_TuneCP5_5p02TeV-pythia8/MINIAODSIM/106X_mc2017_realistic_forppRef5TeV_v3-v3/2530000/67404659-5156-7549-AB1C-20D66F6142B1.root'
         ),
     )
 
 # Select specific event
-# process.source.lumisToProcess = cms.untracked.VLuminosityBlockRange('1:21907')
-# process.source.eventsToProcess = cms.untracked.VEventRange('1:21906437')
+# process.source.lumisToProcess = cms.untracked.VLuminosityBlockRange('1:191')
+# process.source.eventsToProcess = cms.untracked.VEventRange('1:2665247')
 
 # number of events to process, set to -1 to process all events
 process.maxEvents = cms.untracked.PSet(
-    input = cms.untracked.int32(1)
+    input = cms.untracked.int32(-1)
     )
 
 # Multi-thread 
@@ -263,7 +264,7 @@ if doSvtx:
     process.ak4PFJetAnalyzer.svTagInfoLabel = cms.untracked.string(svTagInfoLabel_)
 
 doDeclustering = True
-doAggregation = True
+doAggregation = False
 doChargedOnly = True
 doLatekt_ = False
 
