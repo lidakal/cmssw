@@ -83,6 +83,7 @@ private:
   edm::EDGetTokenT<edm::HepMCProduct> eventInfoTag_;
   edm::EDGetTokenT<GenEventInfoProduct> eventGenInfoTag_;
   edm::EDGetTokenT<double> rho_;
+//   edm::EDGetTokenT<std::vector<GenType>> taggedGenParticlesToken_;
 
   bool doMujets_ = false;
   edm::EDGetTokenT<pat::JetCollection> mujetTag_;
@@ -231,10 +232,14 @@ private:
     // jet aggregated pseudo-B
     float jtmB[MAXJETS]={0};
     float jtBpt[MAXJETS]={0};
+    float jtBeta[MAXJETS]={0};
+    float jtBphi[MAXJETS]={0};
     float jtBntracks[MAXJETS]={0};
     float jtptCh[MAXJETS]={0};
     float refmB[MAXJETS]={0};
     float refBpt[MAXJETS]={0};
+    float refBeta[MAXJETS]={0};
+    float refBphi[MAXJETS]={0};
     float refBntracks[MAXJETS]={0};
     float refptCh[MAXJETS]={0};
     int refNtrk[MAXJETS]={0};
@@ -451,13 +456,14 @@ private:
     float trkInSvtxNotInJetPhi[MAXTRACKS]={0};
 
 
-    int ntrk=0;
     int jtNtrk[MAXJETS]={0};
+    int ntrk=0;
     int trkJetId[MAXTRACKS]={0};
     int trkSvtxId[MAXTRACKS]={0};
     float trkPt[MAXTRACKS]={0};
     float trkEta[MAXTRACKS]={0};
     float trkPhi[MAXTRACKS]={0};
+    float trkY[MAXTRACKS]={0};
     float trkIp3d[MAXTRACKS]={0};
     float trkIp3dSig[MAXTRACKS]={0};
     float trkIp2d[MAXTRACKS]={0};
@@ -471,6 +477,17 @@ private:
     int trkMatchSta[MAXTRACKS]={0};
     int trkMatchPdgId[MAXTRACKS]={0};
     float trkBdtScore[MAXTRACKS]={0};
+    float trkMass[MAXTRACKS]={0};
+
+    int nrefTrk=0;
+    int refTrkJetId[MAXTRACKS]={0};
+    float refTrkPt[MAXTRACKS]={0};
+    float refTrkEta[MAXTRACKS]={0};
+    float refTrkPhi[MAXTRACKS]={0};
+    int refTrkPdgId[MAXTRACKS]={0};
+    int refTrkSta[MAXTRACKS]={0};
+    float refTrkY[MAXTRACKS]={0};
+    float refTrkMass[MAXTRACKS]={0};
 
     float trackPtRel[MAXTRACKS]={0};
     float trackPtRatio[MAXTRACKS]={0};

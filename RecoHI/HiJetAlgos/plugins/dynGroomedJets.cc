@@ -125,6 +125,10 @@ private:
   std::vector<std::string> tmva_spectator_names_;
   std::string ipTagInfoLabel_;
   std::string svTagInfoLabel_;
+
+  const double elMass = 0.000511169;
+  const double piMass = 0.139526;
+  const double muMass = 0.105652;
 };
 
 template <class T>
@@ -280,12 +284,14 @@ void dynGroomedJets<T>::produce(edm::StreamID, edm::Event& iEvent, const edm::Ev
         }
         // std::cout << "genjet i = " << jetIndex << " pt " << jet.pt() << " pt " << pseudoHF.pt() << std::endl;
       } else {
-		    // std::cout << "------->Aggregating HF for reco jet" << std::endl; 
+        // std::cout << "------->Aggregating HF for reco jet" << std::endl; 
+        // std::cout << "reco jet i = " << jetIndex << " pt " << jet.pt() << std::endl;
         reco::TrackToGenParticleMap recoMap = isMC_ ? *candToGenParticleMap : reco::TrackToGenParticleMap();
         auto tempTuple = aggregateHFReco(jet, recoMap);
         jetConstituents = std::get<0>(tempTuple);
         auto droppedTracks = std::get<1>(tempTuple);
         pseudoHF = std::get<2>(tempTuple);
+        // std::cout << "\t pseudoHF m=" << pseudoHF.mass() << std::endl;
 
         droppedTrackCollection->insert(droppedTrackCollection->end(), droppedTracks.begin(), droppedTracks.end());
         // std::cout << "reco jet i = " << jetIndex << " pt " << jet.pt() << " mb " << pseudoHF.mass() << std::endl;
@@ -305,7 +311,19 @@ void dynGroomedJets<T>::produce(edm::StreamID, edm::Event& iEvent, const edm::Ev
       for (edm::Ptr<reco::Candidate> constituent : constituents) {
         if ((chargedOnly_) && (constituent->charge() == 0)) continue;
         if (constituent->pt() < ptCut_) continue;
-        jetConstituents.push_back(fastjet::PseudoJet(constituent->px(), constituent->py(), constituent->pz(), constituent->energy()));
+
+        // fix particle mass-energy
+        double mass = 0.;
+        if (std::abs(constituent->pdgId()) == 11) mass = elMass;
+        else if (std::abs(constituent->pdgId()) == 13) mass = muMass;
+        else mass = piMass;
+        reco::Candidate::PolarLorentzVector constitV(0., 0., 0., 0.);
+        constitV.SetPt(constituent->pt());
+        constitV.SetEta(constituent->eta());
+        constitV.SetPhi(constituent->phi());
+        constitV.SetM(mass);
+
+        jetConstituents.push_back(fastjet::PseudoJet(constituent->px(), constituent->py(), constituent->pz(), constitV.energy()));
       }
     }
 
@@ -656,6 +674,10 @@ typename dynGroomedJets<T>::jetConstituentsPseudoHFTuple dynGroomedJets<T>::aggr
       distanceToJetAxis = trkIPdata.distanceToJetAxis.value();
       int pdg = constit->pdgId();
       isLepton = (std::abs(pdg) == 11) || (std::abs(pdg) == 13);
+    //   if (isLepton) {
+    //     std::cout << "\tpdg = " << pdg << ", mass = " << constit->mass() << std::endl;
+    //   }
+    //   if (!isLepton&&abs(constit->mass()-0.139526)>1e-3) std::cout << "\tpdg = " << pdg << ", mass = " << constit->mass() << std::endl;
 
       // if nan go back to missing_value
       if (ip3dSig != ip3dSig) ip3dSig = missing_value;
@@ -771,15 +793,34 @@ typename dynGroomedJets<T>::jetConstituentsPseudoHFTuple dynGroomedJets<T>::aggr
         if (prediction > -0.3) {
           status = 100;
         }
-      } // endif 
+      } // endif withTMVA_
     } // endif *not* with truth info
+
+    // Make lorentz vector with correct mass, energy
+    double mass = 0.;
+    if (std::abs(constit->pdgId()) == 11) mass = elMass;
+    else if (std::abs(constit->pdgId()) == 13) mass = muMass;
+    else mass = piMass;
+    reco::Candidate::PolarLorentzVector constitV(0., 0., 0., 0.);
+    constitV.SetPt(constit->pt());
+    constitV.SetEta(constit->eta());
+    constitV.SetPhi(constit->phi());
+    constitV.SetM(mass);
+
+    double energy = constitV.energy();
 
     // Add particle to output collection or from HF map
     if (status == 1) {
-      fastjet::PseudoJet outConstit(constit->px(), constit->py(), constit->pz(), constit->energy());
+      fastjet::PseudoJet outConstit(constit->px(), constit->py(), constit->pz(), energy);
+    //   std::cout << "\t\t primary constit pt " << constit->pt() << ", pdgId " << constit->pdgId() 
+    //             << ", mass " << constit->mass() << ", energy " << constit->energy() << ", energy2 " << energy 
+    //             << ", rapidity " << constit->rapidity() << ", rapidity2 " << constitV.Rapidity() 
+    //             << std::endl;
       outputJetConstituents.push_back(outConstit);
     } else if (status >= 100) {
-      hfConstituentsMap[status].push_back(constit);
+        // std::cout << "\t\t b constit pt " << constit->pt() << ", pdgId " << constit->pdgId() << ", mass " << constit->mass() << ", energy " << constit->energy() << std::endl;
+        // if (abs(constit->pdgId())==11) std::cout << "electron constit" << std::endl;
+        hfConstituentsMap[status].push_back(constit);
     }
   } // end jet constituents loop
   // Aggregate particles coming from HF decays into pseudo-B/C's 
@@ -792,7 +833,13 @@ typename dynGroomedJets<T>::jetConstituentsPseudoHFTuple dynGroomedJets<T>::aggr
       productLorentzVector.SetPt(hfConstituent->pt());
       productLorentzVector.SetEta(hfConstituent->eta());
       productLorentzVector.SetPhi(hfConstituent->phi());
-      productLorentzVector.SetM(hfConstituent->mass());
+      double mass = 0.;
+      if (std::abs(hfConstituent->pdgId()) == 11) mass = elMass;
+      else if (std::abs(hfConstituent->pdgId()) == 13) mass = muMass;
+      else mass = piMass;
+      productLorentzVector.SetM(mass);
+    //   std::cout << "px=" << hfConstituent->px() << ", py=" << hfConstituent->py() << ", pz=" << hfConstituent->pz() << ", e=" << hfConstituent->energy() << std::endl;
+    //   std::cout << "hfConstituent->mass()=" << hfConstituent->mass() << ", productLorentzVector.M()" << productLorentzVector.M() << std::endl;
       pseudoHF += productLorentzVector;
       totalPseudoHF += productLorentzVector;
 
@@ -807,8 +854,9 @@ typename dynGroomedJets<T>::jetConstituentsPseudoHFTuple dynGroomedJets<T>::aggr
   
   outputPseudoHF.setP4(totalPseudoHF);
   // std::cout << "vector pt = " << totalPseudoHF.pt() << ", reco::PFCandidate pt = " << outputPseudoHF.pt() << std::endl;
-
-  // std::cout << "end aggregation" << std::endl;
+//   std::cout << "\t vector mass " << totalPseudoHF.M() << " candidate mass " << outputPseudoHF.mass() << std::endl;
+//   std::cout << "\t ndaughters " << outputPseudoHF.numberOfDaughters() << std::endl;
+//   std::cout << "\t end aggregation" << std::endl;
   return dynGroomedJets<T>::jetConstituentsPseudoHFTuple {outputJetConstituents, droppedTracks, outputPseudoHF};
 } // end aggregateHFReco()
 
@@ -842,6 +890,8 @@ typename dynGroomedJets<T>::jetConstituentsPseudoHFTuple dynGroomedJets<T>::aggr
       std::cout << "found a neutrino" << std::endl;
       continue;
     }
+
+    //   if (abs(constit->pdgId())!=211&&abs(constit->mass()-0.139526)>1e-3) std::cout << "\tpdg = " << constit->pdgId() << ", mass = " << constit->mass() << std::endl;
   
     // Get status of matched gen particle
     edm::Ptr<pat::PackedGenParticle> matchGenParticle = candToGenParticleMap.at(constit);
@@ -884,7 +934,7 @@ typename dynGroomedJets<T>::jetConstituentsPseudoHFTuple dynGroomedJets<T>::aggr
   // std::cout << "\tgenjet has " << hfConstituentsMap.size() << " B's " << std::endl;
 
   outputPseudoHF.setP4(totalPseudoHF);
-  // std::cout << "vector mass " << totalPseudoHF.M() << " candidate mass " << outputPseudoHF.mass() << std::endl;
+//   std::cout << "vector mass " << totalPseudoHF.M() << " candidate mass " << outputPseudoHF.mass() << std::endl;
   // std::cout << "\tjet constituents after aggregation" << std::endl;
   // for (fastjet::PseudoJet constit : outputJetConstituents) {
   //   std::cout << "\t\t-m=" << constit.m() << std::endl;

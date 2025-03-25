@@ -52,8 +52,9 @@ process.source = cms.Source("PoolSource",
     )
 
 # Select specific event
-# process.source.lumisToProcess = cms.untracked.VLuminosityBlockRange('1:191')
-# process.source.eventsToProcess = cms.untracked.VEventRange('1:2665247')
+# process.source.lumisToProcess = cms.untracked.VLuminosityBlockRange('1:25')
+# process.source.eventsToProcess = cms.untracked.VEventRange('1:337733') # jet with electron with wrong mass
+# process.source.eventsToProcess = cms.untracked.VEventRange('1:335616') # jet with pion with wrong mass
 
 # number of events to process, set to -1 to process all events
 process.maxEvents = cms.untracked.PSet(
@@ -264,7 +265,7 @@ if doSvtx:
     process.ak4PFJetAnalyzer.svTagInfoLabel = cms.untracked.string(svTagInfoLabel_)
 
 doDeclustering = True
-doAggregation = False
+doAggregation = True
 doChargedOnly = True
 doLatekt_ = False
 
