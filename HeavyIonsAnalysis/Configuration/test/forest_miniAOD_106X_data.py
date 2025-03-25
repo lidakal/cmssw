@@ -47,7 +47,7 @@ process.source = cms.Source("PoolSource",
 
 # number of events to process, set to -1 to process all events
 process.maxEvents = cms.untracked.PSet(
-    input = cms.untracked.int32(1)
+    input = cms.untracked.int32(-1)
     )
 
 # Multi-thread 
@@ -73,8 +73,8 @@ process.GlobalTag.snapshotTime = cms.string("9999-12-31 23:59:59.000")
 
 process.GlobalTag.toGet.extend([
     cms.PSet(record = cms.string("BTagTrackProbability3DRcd"),
-             tag = cms.string("JPcalib_Data94X_2017pp_v2"), # data tag
-            #  tag = cms.string("JPcalib_MC94X_2017pp_v2"), # mc tag
+             tag = cms.string("JPcalib_Data94X_2017pp_v2"), # data JP calib tag
+            #  tag = cms.string("JPcalib_MC94X_2017pp_v2"), # mc JP calib tag
              connect = cms.string("frontier://FrontierProd/CMS_CONDITIONS")
 
          )

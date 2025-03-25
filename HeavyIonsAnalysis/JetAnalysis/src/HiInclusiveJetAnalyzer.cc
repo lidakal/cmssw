@@ -58,6 +58,9 @@ HiInclusiveJetAnalyzer::HiInclusiveJetAnalyzer(const edm::ParameterSet& iConfig)
     svTagInfoLabel_ = iConfig.getUntrackedParameter<std::string>("svTagInfoLabel");
   }
 
+//   taggedGenParticlesToken_ = consumes<std::vector<GenType>>(cfg.getParameter<edm::InputTag>("taggedGenParticleSrc"));
+//   if (taggedGenParticlesToken_) std::cout << "token initialized" << std::endl;
+
   //reWTA reclustering
   doWTARecluster_ = iConfig.getUntrackedParameter<bool>("doWTARecluster", false);
 
@@ -262,6 +265,8 @@ void HiInclusiveJetAnalyzer::beginJob() {
 
     t->Branch("jtmB", jets_.jtmB, "jtmB[nref]/F");
     t->Branch("jtBpt", jets_.jtBpt, "jtBpt[nref]/F");
+    t->Branch("jtBeta", jets_.jtBeta, "jtBeta[nref]/F");
+    t->Branch("jtBphi", jets_.jtBphi, "jtBphi[nref]/F");
     t->Branch("jtBntracks", jets_.jtBntracks, "jtBntracks[nref]/F");
     
     if (isMC_) {
@@ -281,6 +286,8 @@ void HiInclusiveJetAnalyzer::beginJob() {
 
       t->Branch("refmB", jets_.refmB, "refmB[nref]/F");
       t->Branch("refBpt", jets_.refBpt, "refBpt[nref]/F");
+      t->Branch("refBeta", jets_.refBeta, "refBeta[nref]/F");
+      t->Branch("refBphi", jets_.refBphi, "refBphi[nref]/F");
       t->Branch("refBntracks", jets_.refBntracks, "refBntracks[nref]/F");
     }
   }
@@ -368,6 +375,8 @@ void HiInclusiveJetAnalyzer::beginJob() {
     t->Branch("trkPt", jets_.trkPt, "trkPt[ntrk]/F");
     t->Branch("trkEta", jets_.trkEta, "trkEta[ntrk]/F");
     t->Branch("trkPhi", jets_.trkPhi, "trkPhi[ntrk]/F");
+    t->Branch("trkY", jets_.trkY, "trkY[ntrk]/F");
+    t->Branch("trkMass", jets_.trkMass, "trkMass[ntrk]/F");
     t->Branch("trkIp3d", jets_.trkIp3d, "trkIp3d[ntrk]/F");
     t->Branch("trkIp3dSig", jets_.trkIp3dSig, "trkIp3dSig[ntrk]/F");
     t->Branch("trkIp2d", jets_.trkIp2d, "trkIp2d[ntrk]/F");
@@ -386,6 +395,15 @@ void HiInclusiveJetAnalyzer::beginJob() {
     if (isMC_) {
       t->Branch("refptCh", jets_.refptCh, "refptCh[nref]/F");
       t->Branch("refNtrk", jets_.refNtrk, "refNtrk[nref]/I");
+      t->Branch("nrefTrk", &jets_.nrefTrk, "nrefTrk/I");
+      t->Branch("refTrkJetId", jets_.refTrkJetId, "refTrkJetId[nrefTrk]/I");
+      t->Branch("refTrkPdgId", jets_.refTrkPdgId, "refTrkPdgId[nrefTrk]/I");
+      t->Branch("refTrkSta", jets_.refTrkSta, "refTrkSta[nrefTrk]/I");
+      t->Branch("refTrkPt", jets_.refTrkPt, "refTrkPt[nrefTrk]/F");
+      t->Branch("refTrkEta", jets_.refTrkEta, "refTrkEta[nrefTrk]/F");
+      t->Branch("refTrkPhi", jets_.refTrkPhi, "refTrkPhi[nrefTrk]/F");
+      t->Branch("refTrkY", jets_.refTrkY, "refTrkY[nrefTrk]/F");
+      t->Branch("refTrkMass", jets_.refTrkMass, "refTrkMass[nrefTrk]/F");
     }
   }
 
@@ -714,6 +732,7 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
   // std::cout << *rho << ", " << jets_.rho << std::endl;
   
   if (doTracks_) jets_.ntrk = 0;
+  jets_.nrefTrk = 0;
   if (doSvtx_) {
     jets_.nsvtx = 0;
     jets_.ntrkInSvtxNotInJet = 0;
@@ -1003,7 +1022,13 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
         auto itIPTrack = std::find(ipTracks.begin(), ipTracks.end(), constit);
         if (itIPTrack == ipTracks.end()) continue;
 
-        
+        const double elMass = 0.000511169;
+        const double piMass = 0.139526;
+        const double muMass = 0.105652;
+        double mass = 0.;
+        if (std::abs(constit->pdgId()) == 11) mass = elMass;
+        else if (std::abs(constit->pdgId()) == 13) mass = muMass;
+        else mass = piMass;        
 
         // Check if the track was dropped from the aggregation
         if (isMC_) {
@@ -1023,11 +1048,12 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
 
         int ijetTrack = jets_.ntrk + jets_.jtNtrk[jets_.nref];
 
+        
         reco::Candidate::PolarLorentzVector constitV(0., 0., 0., 0.);
         constitV.SetPt(constit->pt());
         constitV.SetEta(constit->eta());
         constitV.SetPhi(constit->phi());
-        constitV.SetM(constit->mass());
+        constitV.SetM(mass);
         chJet += constitV;
 
         int itrk = itIPTrack - ipTracks.begin();
@@ -1038,6 +1064,9 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
         jets_.trkPt[ijetTrack] = constit->pt();
         jets_.trkEta[ijetTrack] = constit->eta();
         jets_.trkPhi[ijetTrack] = constit->phi();
+        jets_.trkY[ijetTrack] = constitV.Rapidity();
+        jets_.trkMass[ijetTrack] = mass;
+
 
         jets_.trkIp3d[ijetTrack] = trkIPData.ip3d.value();
         jets_.trkIp3dSig[ijetTrack] = trkIPData.ip3d.significance();
@@ -1322,72 +1351,78 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
     jets_.jtsym[jets_.nref] = -999.;
     jets_.jtdroppedBranches[jets_.nref] = -999;
 
-    if (doSubJets_)
-      analyzeSubjets(jet);
-        // std::cout << "new jet pt=" << jet.pt() << std::endl;
-      if (doSubJetsNew_) {
-      int iGroomedJet = getGroomedJetIndex(jet, *groomedJets);
-      if (iGroomedJet > -1) {
-        const reco::Jet& groomedJet = (*groomedJets)[iGroomedJet];
-        // std::cout << "groomed jet has " << groomedJet.numberOfDaughters() << " daughters" << std::endl;
-        if (groomedJet.numberOfDaughters() > 0) {
-          const Candidate & sjt1 = *groomedJet.daughter(0);       
-          jets_.sjt1E[jets_.nref] = sjt1.energy();
-          jets_.sjt1Y[jets_.nref] = sjt1.y();
-          jets_.sjt1Pz[jets_.nref] = sjt1.pz();
-          jets_.sjt1Pt[jets_.nref] = sjt1.pt();
-          jets_.sjt1Eta[jets_.nref] = sjt1.eta();
-          jets_.sjt1Phi[jets_.nref] = sjt1.phi();
+    if (doSubJets_) analyzeSubjets(jet);
+    // std::cout << "new jet pt=" << jet.pt() << std::endl;
+    if (doSubJetsNew_) {
+        int iGroomedJet = getGroomedJetIndex(jet, *groomedJets);
+        if (iGroomedJet > -1) {
+            const reco::Jet& groomedJet = (*groomedJets)[iGroomedJet];
+            // std::cout << "groomed jet has " << groomedJet.numberOfDaughters() << " daughters" << std::endl;
+            if (groomedJet.numberOfDaughters() > 0) {
+                const Candidate & sjt1 = *groomedJet.daughter(0);       
+                jets_.sjt1E[jets_.nref] = sjt1.energy();
+                jets_.sjt1Y[jets_.nref] = sjt1.y();
+                jets_.sjt1Pz[jets_.nref] = sjt1.pz();
+                jets_.sjt1Pt[jets_.nref] = sjt1.pt();
+                jets_.sjt1Eta[jets_.nref] = sjt1.eta();
+                jets_.sjt1Phi[jets_.nref] = sjt1.phi();
 
-          if (groomedJet.jetArea() > 0.5) jets_.sjt1HasHF[jets_.nref] = 1;
-          else jets_.sjt1HasHF[jets_.nref] = 0;
+                if (groomedJet.jetArea() > 0.5) jets_.sjt1HasHF[jets_.nref] = 1;
+                else jets_.sjt1HasHF[jets_.nref] = 0;
 
-          // std::cout << "new sjt" << std::endl;
-          // std::cout << "\tsjt1Y = " << sjt1.y() << std::endl;
-          // std::cout << "\tsjt1E = " << sjt1.energy() << std::endl;
-          // std::cout << "\tsjt1Pz = " << sjt1.pz() << std::endl;
-          // std::cout << "\tsjt1y calc = " << 0.5*sjt1.pz() << std::endl;
-          
-          if (groomedJet.numberOfDaughters() > 1) {
-            const Candidate & sjt2 = *groomedJet.daughter(1);
-            jets_.sjt2E[jets_.nref] = sjt2.energy();
-            jets_.sjt2Y[jets_.nref] = sjt2.y();
-            jets_.sjt2Pz[jets_.nref] = sjt2.pz();
-            jets_.sjt2Pt[jets_.nref] = sjt2.pt();
-            jets_.sjt2Eta[jets_.nref] = sjt2.eta();
-            jets_.sjt2Phi[jets_.nref] = sjt2.phi();
-          } else{
-            jets_.sjt2Pt[jets_.nref] = -1;
-            jets_.sjt2Eta[jets_.nref] = -999;
-            jets_.sjt2Phi[jets_.nref] = -999;
-            jets_.sjt2E[jets_.nref] = -1;
-            jets_.sjt2Y[jets_.nref] = -999;
-            jets_.sjt2Pz[jets_.nref] = -999;
-          }
-        } else {
-          jets_.sjt1HasHF[jets_.nref] = -1;
+                // std::cout << "new sjt" << std::endl;
+                // std::cout << "\tsjt1Y = " << sjt1.y() << std::endl;
+                // std::cout << "\tsjt1E = " << sjt1.energy() << std::endl;
+                // std::cout << "\tsjt1Pz = " << sjt1.pz() << std::endl;
+                // std::cout << "\tsjt1y calc = " << 0.5*sjt1.pz() << std::endl;
+                
+                if (groomedJet.numberOfDaughters() > 1) {
+                const Candidate & sjt2 = *groomedJet.daughter(1);
+                jets_.sjt2E[jets_.nref] = sjt2.energy();
+                jets_.sjt2Y[jets_.nref] = sjt2.y();
+                jets_.sjt2Pz[jets_.nref] = sjt2.pz();
+                jets_.sjt2Pt[jets_.nref] = sjt2.pt();
+                jets_.sjt2Eta[jets_.nref] = sjt2.eta();
+                jets_.sjt2Phi[jets_.nref] = sjt2.phi();
+                } else{
+                jets_.sjt2Pt[jets_.nref] = -1;
+                jets_.sjt2Eta[jets_.nref] = -999;
+                jets_.sjt2Phi[jets_.nref] = -999;
+                jets_.sjt2E[jets_.nref] = -1;
+                jets_.sjt2Y[jets_.nref] = -999;
+                jets_.sjt2Pz[jets_.nref] = -999;
+                }
+            } else {
+                jets_.sjt1HasHF[jets_.nref] = -1;
 
-          jets_.sjt1E[jets_.nref] = -1;
-          jets_.sjt1Y[jets_.nref] = -999;
-          jets_.sjt1Pz[jets_.nref] = -999;
-          jets_.sjt1Pt[jets_.nref] = -1;
-          jets_.sjt1Eta[jets_.nref] = -999;
-          jets_.sjt1Phi[jets_.nref] = -999;
-        }     
-        if (pseudoHFCollection->size() > 0) {
-          // std::cout << "in pseudoHFCollection" << std::endl;
-          reco::PFCandidate pseudoHF = (*pseudoHFCollection)[iGroomedJet];
-          jets_.jtmB[jets_.nref] = pseudoHF.mass();
-          jets_.jtBpt[jets_.nref] = pseudoHF.pt();
-          jets_.jtBntracks[jets_.nref] = pseudoHF.numberOfDaughters();
-        } else {
-          jets_.jtmB[jets_.nref] = -1.;
-          jets_.jtBpt[jets_.nref] = -1;
-          jets_.jtBntracks[jets_.nref] = -1;
-        }
-      } // end if groomedJet match exists
-    
-      if (isMC_) {
+                jets_.sjt1E[jets_.nref] = -1;
+                jets_.sjt1Y[jets_.nref] = -999;
+                jets_.sjt1Pz[jets_.nref] = -999;
+                jets_.sjt1Pt[jets_.nref] = -1;
+                jets_.sjt1Eta[jets_.nref] = -999;
+                jets_.sjt1Phi[jets_.nref] = -999;
+            }     
+            if (pseudoHFCollection->size() > 0) {
+                // std::cout << "in pseudoHFCollection" << std::endl;
+                reco::PFCandidate pseudoHF = (*pseudoHFCollection)[iGroomedJet];
+                jets_.jtmB[jets_.nref] = pseudoHF.mass();
+            //   if (pseudoHF.mass() < 0) {
+                // std::cout << "m=" << pseudoHF.mass() << std::endl; 
+            //   }
+                jets_.jtBpt[jets_.nref] = pseudoHF.pt();
+                jets_.jtBeta[jets_.nref] = pseudoHF.eta();
+                jets_.jtBphi[jets_.nref] = pseudoHF.phi();
+                jets_.jtBntracks[jets_.nref] = pseudoHF.numberOfDaughters();
+            } else {
+                jets_.jtmB[jets_.nref] = -1.;
+                jets_.jtBpt[jets_.nref] = -1;
+                jets_.jtBeta[jets_.nref] = -1;
+                jets_.jtBphi[jets_.nref] = -1;
+                jets_.jtBntracks[jets_.nref] = -1;
+            }
+            } // end if groomedJet match exists
+
+        if (isMC_) {
         const reco::GenJet *genJet = jet.genJet();
         // std::cout << " jet " 
         //             << " pt " << jet.pt()
@@ -1395,34 +1430,34 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
         //             << " phi " << jet.phi()
         //             << std::endl;
         if (genJet) {
-          // std::cout << " gen jet " 
-          //           << " pt " << (*genJet).pt()
-          //           << " eta " << (*genJet).eta()
-          //           << " phi " << (*genJet).phi()
-          //           << std::endl;
-          int iGroomedGenJet = getGroomedJetIndex(*genJet, *groomedGenJets);
-          // int iGroomedGenJet = -1;
-          // std::cout << Form("genJet in ntuple i=%d: pt=%f, eta=%f, phi=%f", jets_.nref, genJet->pt() , genJet->eta() , genJet->phi() ) 
-          //   << " matched to i = " << iGroomedGenJet << " w/ pt = " << (*groomedGenJets)[iGroomedGenJet].pt()
-          //   << std::endl;
-      
-          // std::cout << "groomed jets type: " << typeid(*groomedGenJets).name() << std::endl;
-          if (iGroomedGenJet > -1) {
+            // std::cout << " gen jet " 
+            //           << " pt " << (*genJet).pt()
+            //           << " eta " << (*genJet).eta()
+            //           << " phi " << (*genJet).phi()
+            //           << std::endl;
+            int iGroomedGenJet = getGroomedJetIndex(*genJet, *groomedGenJets);
+            // int iGroomedGenJet = -1;
+            // std::cout << Form("genJet in ntuple i=%d: pt=%f, eta=%f, phi=%f", jets_.nref, genJet->pt() , genJet->eta() , genJet->phi() ) 
+            //   << " matched to i = " << iGroomedGenJet << " w/ pt = " << (*groomedGenJets)[iGroomedGenJet].pt()
+            //   << std::endl;
+        
+            // std::cout << "groomed jets type: " << typeid(*groomedGenJets).name() << std::endl;
+            if (iGroomedGenJet > -1) {
             const reco::Jet& groomedGenJet = (*groomedGenJets)[iGroomedGenJet];
             // std::cout << "groomed jet has " << groomedGenJet.numberOfDaughters() << " daughters" << std::endl;
             if (groomedGenJet.numberOfDaughters() > 0) {
-              const Candidate & rsjt1 = *groomedGenJet.daughter(0);       
-              jets_.rsjt1E[jets_.nref] = rsjt1.energy();
-              jets_.rsjt1Y[jets_.nref] = rsjt1.y();
-              jets_.rsjt1Pz[jets_.nref] = rsjt1.pz();
-              jets_.rsjt1Pt[jets_.nref] = rsjt1.pt();
-              jets_.rsjt1Eta[jets_.nref] = rsjt1.eta();
-              jets_.rsjt1Phi[jets_.nref] = rsjt1.phi();
+                const Candidate & rsjt1 = *groomedGenJet.daughter(0);       
+                jets_.rsjt1E[jets_.nref] = rsjt1.energy();
+                jets_.rsjt1Y[jets_.nref] = rsjt1.y();
+                jets_.rsjt1Pz[jets_.nref] = rsjt1.pz();
+                jets_.rsjt1Pt[jets_.nref] = rsjt1.pt();
+                jets_.rsjt1Eta[jets_.nref] = rsjt1.eta();
+                jets_.rsjt1Phi[jets_.nref] = rsjt1.phi();
 
-              if (groomedGenJet.jetArea() > 0.5) jets_.rsjt1HasHF[jets_.nref] = 1;
-              else jets_.rsjt1HasHF[jets_.nref] = 0;
-              
-              if (groomedGenJet.numberOfDaughters() > 1) {
+                if (groomedGenJet.jetArea() > 0.5) jets_.rsjt1HasHF[jets_.nref] = 1;
+                else jets_.rsjt1HasHF[jets_.nref] = 0;
+                
+                if (groomedGenJet.numberOfDaughters() > 1) {
                 const Candidate & rsjt2 = *groomedGenJet.daughter(1);
                 jets_.rsjt2E[jets_.nref] = rsjt2.energy();
                 jets_.rsjt2Y[jets_.nref] = rsjt2.y();
@@ -1430,67 +1465,108 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
                 jets_.rsjt2Pt[jets_.nref] = rsjt2.pt();
                 jets_.rsjt2Eta[jets_.nref] = rsjt2.eta();
                 jets_.rsjt2Phi[jets_.nref] = rsjt2.phi();
-              } else{
+                } else{
                 jets_.rsjt2Pt[jets_.nref] = -1;
                 jets_.rsjt2Eta[jets_.nref] = -999;
                 jets_.rsjt2Phi[jets_.nref] = -999;
                 jets_.rsjt2E[jets_.nref] = -1;
                 jets_.rsjt2Y[jets_.nref] = -999;
                 jets_.rsjt2Pz[jets_.nref] = -999;
-              }
+                }
             } else {
-              jets_.rsjt1HasHF[jets_.nref] = -1;
+                jets_.rsjt1HasHF[jets_.nref] = -1;
 
-              jets_.rsjt1E[jets_.nref] = -1;
-              jets_.rsjt1Y[jets_.nref] = -999;
-              jets_.rsjt1Pz[jets_.nref] = -999;
-              jets_.rsjt1Pt[jets_.nref] = -1;
-              jets_.rsjt1Eta[jets_.nref] = -999;
-              jets_.rsjt1Phi[jets_.nref] = -999;
+                jets_.rsjt1E[jets_.nref] = -1;
+                jets_.rsjt1Y[jets_.nref] = -999;
+                jets_.rsjt1Pz[jets_.nref] = -999;
+                jets_.rsjt1Pt[jets_.nref] = -1;
+                jets_.rsjt1Eta[jets_.nref] = -999;
+                jets_.rsjt1Phi[jets_.nref] = -999;
             }   
             // std::cout << "pseudoHFGenCollection->size()=" << pseudoHFGenCollection->size() << std::endl;
             if (pseudoHFGenCollection->size() > 0) {
-              // std::cout << "in pseudoHFGenCollection" << std::endl;
-              reco::PFCandidate pseudoBGen = (*pseudoHFGenCollection)[iGroomedGenJet];
-              jets_.refmB[jets_.nref] = pseudoBGen.mass();
-              jets_.refBpt[jets_.nref] = pseudoBGen.pt();
-              jets_.refBntracks[jets_.nref] = pseudoBGen.numberOfDaughters();
+                // std::cout << "in pseudoHFGenCollection" << std::endl;
+                reco::PFCandidate pseudoBGen = (*pseudoHFGenCollection)[iGroomedGenJet];
+                jets_.refmB[jets_.nref] = pseudoBGen.mass();
+                jets_.refBpt[jets_.nref] = pseudoBGen.pt();
+                jets_.refBeta[jets_.nref] = pseudoBGen.eta();
+                jets_.refBphi[jets_.nref] = pseudoBGen.phi();
+                jets_.refBntracks[jets_.nref] = pseudoBGen.numberOfDaughters();
             } else {
-              jets_.refmB[jets_.nref] = -1.;
-              jets_.refBpt[jets_.nref] = -1;
-              jets_.refBntracks[jets_.nref] = -1;
+                jets_.refmB[jets_.nref] = -1.;
+                jets_.refBpt[jets_.nref] = -1;
+                jets_.refBeta[jets_.nref] = -1;
+                jets_.refBphi[jets_.nref] = -1;
+                jets_.refBntracks[jets_.nref] = -1;
             }
-          } // end if groomedGenJet match exists
-          // get charged pt of gen jet
-          jets_.refptCh[jets_.nref] = 0.;
-          jets_.refNtrk[jets_.nref] = 0;
+            } // end if groomedGenJet match exists
+            // get charged pt of gen jet
+            jets_.refptCh[jets_.nref] = 0.;
+            jets_.refNtrk[jets_.nref] = 0;
 
           reco::Candidate::PolarLorentzVector chGenJet(0., 0., 0., 0.);
 
-          for (auto genConstit : genJet->getJetConstituents()) {
-            if (genConstit->pt() < trkPtCut_) continue;
-            if (genConstit->charge() == 0) continue;
+          
+            for (auto genConstit : genJet->getJetConstituents()) {
+                if (genConstit->pt() < trkPtCut_) continue;
+                if (genConstit->charge() == 0) continue;
 
-            bool isNeutrino = (genConstit->pdgId() == 12); // nue
-            isNeutrino &= (genConstit->pdgId() == 14); // numu
-            isNeutrino &= (genConstit->pdgId() == 16); // nutau
-            isNeutrino &= (genConstit->pdgId() == 18); // nutau'
-            if (isNeutrino) continue;
+                bool isNeutrino = (genConstit->pdgId() == 12); // nue
+                isNeutrino &= (genConstit->pdgId() == 14); // numu
+                isNeutrino &= (genConstit->pdgId() == 16); // nutau
+                isNeutrino &= (genConstit->pdgId() == 18); // nutau'
+                if (isNeutrino) continue;
 
-            // std::cout << "genConstit pt=" << genConstit->pt() << std::endl;
+                // std::cout << "genConstit pt=" << genConstit->pt() << std::endl;
 
-            reco::Candidate::PolarLorentzVector constitV(0., 0., 0., 0.);
-            constitV.SetPt(genConstit->pt());
-            constitV.SetEta(genConstit->eta());
-            constitV.SetPhi(genConstit->phi());
-            constitV.SetM(genConstit->mass());
-            chGenJet += constitV;
-            
-            jets_.refNtrk[jets_.nref] += 1;
-          }
+                reco::Candidate::PolarLorentzVector constitV(0., 0., 0., 0.);
+                constitV.SetPt(genConstit->pt());
+                constitV.SetEta(genConstit->eta());
+                constitV.SetPhi(genConstit->phi());
+                constitV.SetM(genConstit->mass());
+                chGenJet += constitV;
 
-          jets_.refptCh[jets_.nref] = chGenJet.pt();
-        } // end if matched gen jet exists
+                int irefTrack = jets_.nrefTrk + jets_.refNtrk[jets_.nref];
+                jets_.refTrkJetId[irefTrack] = jets_.nref;
+                jets_.refTrkPt[irefTrack] = genConstit->pt();
+                jets_.refTrkEta[irefTrack] = genConstit->eta();
+                jets_.refTrkPhi[irefTrack] = genConstit->phi();
+                jets_.refTrkY[irefTrack] = genConstit->rapidity();
+                jets_.refTrkMass[irefTrack] = genConstit->mass();
+                jets_.refTrkPdgId[irefTrack] = genConstit->pdgId();
+
+                // std::cout << "\genConstit->pt()=" << genConstit->pt() << ", genConstit->eta()=" << genConstit->eta() << ", genConstit->phi()=" << genConstit->phi() << std::endl;
+
+                // pack genConstit to retrieve status
+                reco::GenParticle genParticleConstit;
+                genParticleConstit.setP4(constitV);
+                pat::PackedGenParticle packedGenConstit(genParticleConstit, reco::GenParticleRef());
+                // std::cout << "\tpackedGenConstit.pt()=" << packedGenConstit.pt() << ", packedGenConstit.eta()=" << packedGenConstit.eta() << ", packedGenConstit.phi()=" << packedGenConstit.phi() << std::endl;
+
+                double eps=1e-3;
+                // bool foundMatch=false;
+                Int_t genStatus = -1;
+                for (auto genParticle : *genParticles) {
+                    if (std::abs(genParticle.pt()-packedGenConstit.pt())>eps) continue;
+                    if (std::abs(genParticle.eta()-packedGenConstit.eta())>eps) continue;
+                    if (std::abs(genParticle.phi()-packedGenConstit.phi())>eps) continue;
+                    // foundMatch=true;
+                    genStatus = genParticle.status();
+                    // std::cout << "\tgenParticle.pt()=" << genParticle.pt() << ", genParticle.eta()=" << genParticle.eta() << ", genParticle.phi()=" << genParticle.phi() << std::endl;
+                    // std::cout << "\t\tgenParticle.status()=" << genParticle.status() << std::endl;
+                }
+                // if (!foundMatch) std::cout << "didn't find match" << std::endl;
+                // std::cout << "jets_.nref=" << jets_.nref << ", irefTrack=" << irefTrack << ", jets_.refTrkSta[irefTrack]=" << jets_.refTrkSta[irefTrack] << std::endl;
+
+                jets_.refTrkSta[irefTrack] = genStatus;
+                
+                jets_.refNtrk[jets_.nref] += 1;
+            } // end loop of gen constits
+            jets_.nrefTrk += jets_.refNtrk[jets_.nref];
+            // std::cout << "jets_.nref=" << jets_.nref << ", jets_.refNtrk[jets_.nref]=" << jets_.refNtrk[jets_.nref] << std::endl;
+            // std::cout << "jets_.nrefTrk=" << jets_.nrefTrk << std::endl;
+            jets_.refptCh[jets_.nref] = chGenJet.pt();
+        }  // end if matched gen jet exists
       } // end if isMC_
     } // end if doSubJetsNew_
 
