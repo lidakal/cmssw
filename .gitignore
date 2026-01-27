@@ -5,6 +5,10 @@ __init__.py
 #*#
 *~
 *.pb
+*.root
+*.log
+
+crab_projects/
 
 # ignore partially applied patches and their backup
 *.rej
