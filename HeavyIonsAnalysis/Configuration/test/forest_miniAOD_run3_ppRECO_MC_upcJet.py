@@ -41,7 +41,7 @@ process.source = cms.Source("PoolSource",
 # number of events to process, set to -1 to process all events
 process.maxEvents = cms.untracked.PSet(
 #    input = cms.untracked.int32(150000)
-    input = cms.untracked.int32(-1)
+    input = cms.untracked.int32(1000)
 )
 
 ###############################################################################
@@ -97,7 +97,7 @@ process.load('HeavyIonsAnalysis.EventAnalysis.HiGenAnalyzer_cfi')
 
 # event analysis
 process.load('HeavyIonsAnalysis.EventAnalysis.hltanalysis_cfi')
-process.load('HeavyIonsAnalysis.EventAnalysis.hievtanalyzer_data_cfi')
+process.load('HeavyIonsAnalysis.EventAnalysis.hievtanalyzer_mc_cfi')
 process.load('HeavyIonsAnalysis.EventAnalysis.hltanalysis_cfi')
 process.load('HeavyIonsAnalysis.EventAnalysis.skimanalysis_cfi')
 process.load('HeavyIonsAnalysis.EventAnalysis.hltobject_cfi')
