@@ -79,6 +79,7 @@ private:
   edm::EDGetTokenT<pat::JetCollection> matchTag_;
   edm::EDGetTokenT<edm::View<pat::PackedCandidate>> pfCandidateLabel_;
   edm::EDGetTokenT<std::vector<pat::PackedGenParticle>> genParticleSrc_;
+  edm::EDGetTokenT<std::vector<pat::PackedGenParticle>> bHadronsSrc_;
   edm::EDGetTokenT<edm::View<reco::GenJet>> genjetTag_;
   edm::EDGetTokenT<edm::HepMCProduct> eventInfoTag_;
   edm::EDGetTokenT<GenEventInfoProduct> eventGenInfoTag_;
@@ -243,6 +244,17 @@ private:
     float refBntracks[MAXJETS]={0};
     float refptCh[MAXJETS]={0};
     int refNtrk[MAXJETS]={0};
+
+    // true B hadron info
+    int nfullB;
+    int fullBJetId[MAXSVTX]={0};
+    int fullBPdgId[MAXSVTX]={0};
+    int fullBSta[MAXSVTX]={0};
+    float fullBPt[MAXSVTX]={0};
+    float fullBEta[MAXSVTX]={0};
+    float fullBPhi[MAXSVTX]={0};
+    float fullBM[MAXSVTX]={0};
+    float fullBE[MAXSVTX]={0};
 
     //reWTA reclusted jet axis
     float WTAeta[MAXJETS]={0};

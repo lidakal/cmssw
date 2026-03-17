@@ -48,6 +48,8 @@ process.source = cms.Source("PoolSource",
         # fname
         # 'file:/data_CMS/cms/kalipoliti/8B655CAA-8B9D-E04F-AE94-54227BD26D96.root'
         '/store/himc/RunIISummer20UL17pp5TeVMiniAODv2/QCD_pThat-15_bJet_TuneCP5_5p02TeV-pythia8/MINIAODSIM/106X_mc2017_realistic_forppRef5TeV_v3-v3/2530000/67404659-5156-7549-AB1C-20D66F6142B1.root'
+        # '/store/himc/RunIISummer20UL17pp5TeVMiniAODv2/QCD_pThat-15_Dijet_TuneCP5_5p02TeV-pythia8/MINIAODSIM/106X_mc2017_realistic_forppRef5TeV_v3-v3/50000/675B1541-84C5-7F4C-BD7B-51C1930586D8.root'
+        # '/store/himc/RunIISummer20UL17pp5TeVMiniAODv2/QCD_pThat-15_Dijet_TuneCP5_5p02TeV-pythia8/MINIAODSIM/106X_mc2017_realistic_forppRef5TeV_v3-v3/40000/9A5E68AC-F801-B741-9AFA-94D64F0B2490.root'
         ),
     )
 
@@ -286,6 +288,7 @@ if doDeclustering:
     ## Produces a std::vector<pat::PackedGenParticle> named HFdecayProductTagger
 
     process.ak4PFJetAnalyzer.genParticles = cms.untracked.InputTag(taggedGenParticlesName_, "patPackedGenParticles")
+    process.ak4PFJetAnalyzer.bHadrons = cms.untracked.InputTag(taggedGenParticlesName_, "bHadrons")
 
     process.bDecayAna = process.HiGenParticleAna.clone(
         genParticleSrc = cms.InputTag(taggedGenParticlesName_, "patPackedGenParticles"),
@@ -299,6 +302,13 @@ if doDeclustering:
     )
     process.genJetSequence += process.bDecayAna
     ## Creates the gen particle ntuple bDecayAna/hi
+
+    process.bHadronAna = process.bDecayAna.clone(
+        genParticleSrc = cms.InputTag(taggedGenParticlesName_, "bHadrons"),
+        chargedOnly = False
+    )
+    process.genJetSequence += process.bHadronAna
+    ## Creates the gen particle ntuple bHadronAna/hi
 
     process.load("RecoHI.HiJetAlgos.TrackToGenParticleMapProducer_cfi")
     process.TrackToGenParticleMapProducer.jetSrc = cms.InputTag("updatedPatJets")
@@ -338,7 +348,7 @@ if doDeclustering:
         tmva_path = cms.FileInPath("RecoHI/HiJetAlgos/data/TMVAClassification_BDTG.weights.xml"),
         tmva_variables = cms.vstring(tmva_variables),
         doLateKt = cms.bool(doLatekt_),
-        trkInefRate = cms.double(0.)
+        trkInefRate = cms.double(0)
     )
     process.recoJetSequence += process.dynGroomedPFJets
     process.ak4PFJetAnalyzer.groomedJets = cms.untracked.InputTag("dynGroomedPFJets")
