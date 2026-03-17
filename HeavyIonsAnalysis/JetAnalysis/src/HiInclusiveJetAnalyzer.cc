@@ -129,10 +129,12 @@ HiInclusiveJetAnalyzer::HiInclusiveJetAnalyzer(const edm::ParameterSet& iConfig)
   pfCandidateLabel_ =
       consumes<edm::View<pat::PackedCandidate>>(iConfig.getUntrackedParameter<edm::InputTag>("pfCandidateLabel"));
 
-  if (isMC_)
+  if (isMC_) {
     genParticleSrc_ =
         consumes<std::vector<pat::PackedGenParticle>>(iConfig.getUntrackedParameter<edm::InputTag>("genParticles"));
-
+    bHadronsSrc_ =
+        consumes<std::vector<pat::PackedGenParticle>>(iConfig.getUntrackedParameter<edm::InputTag>("bHadrons"));
+  }
   if (doLegacyBtagging_) {
     trackCHEBJetTags_ = "trackCountingHighEffBJetTags";
     trackCHPBJetTags_ = "trackCountingHighPurBJetTags";
@@ -538,10 +540,10 @@ void HiInclusiveJetAnalyzer::beginJob() {
       t->Branch("refSDConstituentsM", &jets_.refSDConstituentsM);
     }
 
-    t->Branch("genChargedSum", jets_.genChargedSum, "genChargedSum[nref]/F");
-    t->Branch("genHardSum", jets_.genHardSum, "genHardSum[nref]/F");
-    t->Branch("signalChargedSum", jets_.signalChargedSum, "signalChargedSum[nref]/F");
-    t->Branch("signalHardSum", jets_.signalHardSum, "signalHardSum[nref]/F");
+    // t->Branch("genChargedSum", jets_.genChargedSum, "genChargedSum[nref]/F");
+    // t->Branch("genHardSum", jets_.genHardSum, "genHardSum[nref]/F");
+    // t->Branch("signalChargedSum", jets_.signalChargedSum, "signalChargedSum[nref]/F");
+    // t->Branch("signalHardSum", jets_.signalHardSum, "signalHardSum[nref]/F");
 
     if (doSubEvent_) {
       t->Branch("subid", jets_.subid, "subid[nref]/I");
@@ -611,6 +613,16 @@ void HiInclusiveJetAnalyzer::beginJob() {
         t->Branch("jtNcPar", jets_.jtNcPar, "jtNcPar[nref]/I");
         t->Branch("jtHasGSPB",jets_.jtHasGSPB,"jtHasGSPB[nref]/O");
         t->Branch("jtHasGSPC",jets_.jtHasGSPC,"jtHasGSPC[nref]/O");
+
+        t->Branch("nfullB", &jets_.nfullB, "nfullB/I");
+        t->Branch("fullBJetId", jets_.fullBJetId, "fullBJetId[nfullB]/I");
+        t->Branch("fullBPdgId", jets_.fullBPdgId, "fullBPdgId[nfullB]/I");
+        t->Branch("fullBSta", jets_.fullBSta, "fullBSta[nfullB]/I");
+        t->Branch("fullBPt", jets_.fullBPt, "fullBPt[nfullB]/F");
+        t->Branch("fullBEta", jets_.fullBEta, "fullBEta[nfullB]/F");
+        t->Branch("fullBPhi", jets_.fullBPhi, "fullBPhi[nfullB]/F");
+        t->Branch("fullBM", jets_.fullBM, "fullBM[nfullB]/F");
+        t->Branch("fullBE", jets_.fullBE, "fullBE[nfullB]/F");
       }
     }
   }
@@ -717,9 +729,11 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
   iEvent.getByToken(pfCandidateLabel_, pfCandidates);
   edm::Handle<std::vector<pat::PackedGenParticle>> genParticles;
   edm::Handle<reco::JetFlavourInfoMatchingCollection> jetFlavourInfos;
+  edm::Handle<std::vector<pat::PackedGenParticle>> bHadrons;
   if (isMC_) {
     iEvent.getByToken(genParticleSrc_, genParticles);
     iEvent.getByToken(jetFlavourInfosToken_, jetFlavourInfos );
+    iEvent.getByToken(bHadronsSrc_, bHadrons);
   }
 
   iEvent.getByToken(primaryVerticesToken_, primaryVertices);
@@ -738,6 +752,9 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
     jets_.ntrkInSvtxNotInJet = 0;
   }
   int nsvtxCounterForTracks = 0;
+  if (isMC_) {
+    jets_.nfullB = 0;
+  }
 
   if (doJetConstituents_) {
     jets_.jtConstituentsId.clear();
@@ -1028,7 +1045,10 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
         double mass = 0.;
         if (std::abs(constit->pdgId()) == 11) mass = elMass;
         else if (std::abs(constit->pdgId()) == 13) mass = muMass;
-        else mass = piMass;        
+        else mass = piMass; 
+        
+        // DEBUG
+        mass = constit->mass();
 
         // Check if the track was dropped from the aggregation
         if (isMC_) {
@@ -1183,11 +1203,11 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
       jets_.trackHardSum[jets_.nref] = 0;
       jets_.trackHardN[jets_.nref] = 0;
 
-      jets_.genChargedSum[jets_.nref] = 0;
-      jets_.genHardSum[jets_.nref] = 0;
+    //   jets_.genChargedSum[jets_.nref] = 0;
+    //   jets_.genHardSum[jets_.nref] = 0;
 
-      jets_.signalChargedSum[jets_.nref] = 0;
-      jets_.signalHardSum[jets_.nref] = 0;
+    //   jets_.signalChargedSum[jets_.nref] = 0;
+    //   jets_.signalHardSum[jets_.nref] = 0;
 
       jets_.subid[jets_.nref] = -1;
 
@@ -1357,6 +1377,7 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
         int iGroomedJet = getGroomedJetIndex(jet, *groomedJets);
         if (iGroomedJet > -1) {
             const reco::Jet& groomedJet = (*groomedJets)[iGroomedJet];
+            // std::cout << "jet pt=" << groomedJet.pt() << ", groomed jet pt=" << groomedJet.pt() << std::endl;
             // std::cout << "groomed jet has " << groomedJet.numberOfDaughters() << " daughters" << std::endl;
             if (groomedJet.numberOfDaughters() > 0) {
                 const Candidate & sjt1 = *groomedJet.daughter(0);       
@@ -1365,7 +1386,7 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
                 jets_.sjt1Pz[jets_.nref] = sjt1.pz();
                 jets_.sjt1Pt[jets_.nref] = sjt1.pt();
                 jets_.sjt1Eta[jets_.nref] = sjt1.eta();
-                jets_.sjt1Phi[jets_.nref] = sjt1.phi();
+                jets_.sjt1Phi[jets_.nref] = sjt1.phi();  
 
                 if (groomedJet.jetArea() > 0.5) jets_.sjt1HasHF[jets_.nref] = 1;
                 else jets_.sjt1HasHF[jets_.nref] = 0;
@@ -1375,22 +1396,33 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
                 // std::cout << "\tsjt1E = " << sjt1.energy() << std::endl;
                 // std::cout << "\tsjt1Pz = " << sjt1.pz() << std::endl;
                 // std::cout << "\tsjt1y calc = " << 0.5*sjt1.pz() << std::endl;
+        
+                // std::cout << "\tsjt1 pt = " << sjt1.pt() << std::endl;
+                // std::cout << "\tsjt1 eta = " << sjt1.eta() << std::endl;
+                // std::cout << "\tsjt1 phi = " << sjt1.phi() << std::endl;
                 
                 if (groomedJet.numberOfDaughters() > 1) {
-                const Candidate & sjt2 = *groomedJet.daughter(1);
-                jets_.sjt2E[jets_.nref] = sjt2.energy();
-                jets_.sjt2Y[jets_.nref] = sjt2.y();
-                jets_.sjt2Pz[jets_.nref] = sjt2.pz();
-                jets_.sjt2Pt[jets_.nref] = sjt2.pt();
-                jets_.sjt2Eta[jets_.nref] = sjt2.eta();
-                jets_.sjt2Phi[jets_.nref] = sjt2.phi();
+                    const Candidate & sjt2 = *groomedJet.daughter(1);
+                    jets_.sjt2E[jets_.nref] = sjt2.energy();
+                    jets_.sjt2Y[jets_.nref] = sjt2.y();
+                    jets_.sjt2Pz[jets_.nref] = sjt2.pz();
+                    jets_.sjt2Pt[jets_.nref] = sjt2.pt();
+                    jets_.sjt2Eta[jets_.nref] = sjt2.eta();
+                    jets_.sjt2Phi[jets_.nref] = sjt2.phi();
+
+                    // std::cout << "\tsjt2 pt = " << sjt2.pt() << std::endl;
+                    // std::cout << "\tsjt2 eta = " << sjt2.eta() << std::endl;
+                    // std::cout << "\tsjt2 phi = " << sjt2.phi() << std::endl;
+
+                    // double delta_R_analyzer = std::sqrt(std::pow(sjt1.eta() - sjt2.eta(), 2) + std::pow(sjt1.phi() - sjt2.phi(), 2));
+                    // std::cout << "subjet delta_R_analyzer = " << delta_R_analyzer << std::endl;
                 } else{
-                jets_.sjt2Pt[jets_.nref] = -1;
-                jets_.sjt2Eta[jets_.nref] = -999;
-                jets_.sjt2Phi[jets_.nref] = -999;
-                jets_.sjt2E[jets_.nref] = -1;
-                jets_.sjt2Y[jets_.nref] = -999;
-                jets_.sjt2Pz[jets_.nref] = -999;
+                    jets_.sjt2Pt[jets_.nref] = -1;
+                    jets_.sjt2Eta[jets_.nref] = -999;
+                    jets_.sjt2Phi[jets_.nref] = -999;
+                    jets_.sjt2E[jets_.nref] = -1;
+                    jets_.sjt2Y[jets_.nref] = -999;
+                    jets_.sjt2Pz[jets_.nref] = -999;
                 }
             } else {
                 jets_.sjt1HasHF[jets_.nref] = -1;
@@ -1760,16 +1792,46 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
       int nc=0;
       bool hasBfromGSP = false;
       bool hasCfromGSP = false;
+      jets_.jtNbHad[jets_.nref] = 0;
+      jets_.jtNcHad[jets_.nref] = 0;
+      int ijetB = 0;
       for (const JetFlavourInfoMatching& jetFlavourInfoMatching : *jetFlavourInfos) {
         if (deltaR(jet.p4(), jetFlavourInfoMatching.first->p4()) < 1e-6) {
+        //   std::cout << "new jet" << std::endl;
           JetFlavourInfo jetInfo = jetFlavourInfoMatching.second;
           const GenParticleRefVector &bHadronsInJet = jetInfo.getbHadrons();
           const GenParticleRefVector &cHadronsInJet = jetInfo.getcHadrons();
 
-          jets_.jtNbHad[jets_.nref] = bHadronsInJet.size();
+          for (auto bHad : bHadronsInJet) {
+            // std::cout << "\tbHad pt=" << bHad->pt() << ", eta=" << bHad->eta() << ", phi=" << bHad->phi() << ", pdgId=" << bHad->pdgId() << ", m=" << bHad->mass() << ", E=" << bHad->energy() << std::endl;
+
+            ijetB = jets_.nfullB + jets_.jtNbHad[jets_.nref];
+            jets_.fullBJetId[ijetB] = jets_.nref;
+            jets_.fullBPt[ijetB] = bHad->pt();
+            jets_.fullBEta[ijetB] = bHad->eta();
+            jets_.fullBPhi[ijetB] = bHad->phi();
+            jets_.fullBM[ijetB] = bHad->mass();
+            jets_.fullBE[ijetB] = bHad->energy();
+            jets_.fullBPdgId[ijetB] = bHad->pdgId();
+
+            // find status
+            jets_.fullBSta[ijetB] = -1;
+            pat::PackedGenParticle packedBHad(*bHad, reco::GenParticleRef());
+            double eps=1e-6;
+            for (auto bHadInEvent : *bHadrons) {
+              if (std::abs(bHadInEvent.pt()-packedBHad.pt())>eps) continue;
+              if (std::abs(bHadInEvent.eta()-packedBHad.eta())>eps) continue;
+              if (std::abs(bHadInEvent.phi()-packedBHad.phi())>eps) continue;
+              jets_.fullBSta[ijetB] = bHadInEvent.status();
+              break;
+            }
+
+            jets_.jtNbHad[jets_.nref]++;
+          }
+          jets_.nfullB += jets_.jtNbHad[jets_.nref]; // should be the same as bHadronsInJet.size();
+          // jets_.jtNbHad[jets_.nref] = bHadronsInJet.size();
           jets_.jtNcHad[jets_.nref] = cHadronsInJet.size();
 
-        //   std::cout << "new jet" << std::endl;
 
           const GenParticleRefVector &partonsInJet = jetInfo.getPartons(); // not present in the PAT jet, need the jetFlavourInfos
           for (GenParticleRefVector::const_iterator it = partonsInJet.begin(); it != partonsInJet.end(); ++it) {

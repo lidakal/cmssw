@@ -77,7 +77,7 @@ HFdecayProductTagger::HFdecayProductTagger(const edm::ParameterSet& cfg)
 
   produces<std::vector<pat::PackedGenParticle>>("patPackedGenParticles");
   produces<std::vector<reco::GenParticle>>("recoGenParticles");
-  
+  produces<std::vector<pat::PackedGenParticle>>("bHadrons");
 	}
 
 
@@ -93,6 +93,7 @@ void HFdecayProductTagger::produce(edm::StreamID, edm::Event &evt, const edm::Ev
   // Create output collection
   auto outputCollection = std::make_unique<std::vector<pat::PackedGenParticle>>();
   auto outputCollectionReco = std::make_unique<std::vector<reco::GenParticle>>();
+  auto bCollection = std::make_unique<std::vector<pat::PackedGenParticle>>();
   //std::cout << "type of outputCollection: " << typeid(outputCollection).name() << std::endl;
 
   // Keep track of HF's
@@ -103,8 +104,10 @@ void HFdecayProductTagger::produce(edm::StreamID, edm::Event &evt, const edm::Ev
     for (const reco::GenParticle& genPart : *genParticles) {
       if(isFinalB(genPart)){
         // std::cout << "Found a B, adding its daughters" << std::endl;
-        // Do NOT add the B
+
+        // Do NOT add the B to the output collection
         //outputCollection->push_back(genPart);
+        bCollection->push_back(pat::PackedGenParticle(reco::GenParticle(genPart.charge(), genPart.p4(), genPart.vertex(), genPart.pdgId(), hfCode, true), reco::GenParticleRef()));
 
         // Add the daughters to the output collection
         reco::GenParticleCollection daughterCollection = {};
@@ -188,6 +191,7 @@ void HFdecayProductTagger::produce(edm::StreamID, edm::Event &evt, const edm::Ev
   // std::cout << "out oh which: " << counts << " charged" << std::endl;
   evt.put(std::move(outputCollection), "patPackedGenParticles");
   evt.put(std::move(outputCollectionReco), "recoGenParticles");
+  evt.put(std::move(bCollection), "bHadrons");
 }
 
 bool HFdecayProductTagger::isFinalB(const reco::Candidate &particle) const 
