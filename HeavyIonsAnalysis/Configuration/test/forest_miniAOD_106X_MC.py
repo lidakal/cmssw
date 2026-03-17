@@ -54,8 +54,9 @@ process.source = cms.Source("PoolSource",
     )
 
 # Select specific event
-# process.source.lumisToProcess = cms.untracked.VLuminosityBlockRange('1:30703')
-# process.source.eventsToProcess = cms.untracked.VEventRange('1:30702120')
+# process.source.lumisToProcess = cms.untracked.VLuminosityBlockRange('1:25')
+# process.source.eventsToProcess = cms.untracked.VEventRange('1:337733') # jet with electron with wrong mass
+# process.source.eventsToProcess = cms.untracked.VEventRange('1:335616') # jet with pion with wrong mass
 
 # number of events to process, set to -1 to process all events
 process.maxEvents = cms.untracked.PSet(

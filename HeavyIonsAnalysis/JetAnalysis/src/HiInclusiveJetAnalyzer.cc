@@ -1045,10 +1045,7 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
         double mass = 0.;
         if (std::abs(constit->pdgId()) == 11) mass = elMass;
         else if (std::abs(constit->pdgId()) == 13) mass = muMass;
-        else mass = piMass; 
-        
-        // DEBUG
-        mass = constit->mass();
+        else mass = piMass;        
 
         // Check if the track was dropped from the aggregation
         if (isMC_) {
@@ -1377,7 +1374,6 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
         int iGroomedJet = getGroomedJetIndex(jet, *groomedJets);
         if (iGroomedJet > -1) {
             const reco::Jet& groomedJet = (*groomedJets)[iGroomedJet];
-            // std::cout << "jet pt=" << groomedJet.pt() << ", groomed jet pt=" << groomedJet.pt() << std::endl;
             // std::cout << "groomed jet has " << groomedJet.numberOfDaughters() << " daughters" << std::endl;
             if (groomedJet.numberOfDaughters() > 0) {
                 const Candidate & sjt1 = *groomedJet.daughter(0);       
@@ -1386,7 +1382,7 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
                 jets_.sjt1Pz[jets_.nref] = sjt1.pz();
                 jets_.sjt1Pt[jets_.nref] = sjt1.pt();
                 jets_.sjt1Eta[jets_.nref] = sjt1.eta();
-                jets_.sjt1Phi[jets_.nref] = sjt1.phi();  
+                jets_.sjt1Phi[jets_.nref] = sjt1.phi();
 
                 if (groomedJet.jetArea() > 0.5) jets_.sjt1HasHF[jets_.nref] = 1;
                 else jets_.sjt1HasHF[jets_.nref] = 0;
@@ -1396,33 +1392,22 @@ void HiInclusiveJetAnalyzer::analyze(const Event& iEvent, const EventSetup& iSet
                 // std::cout << "\tsjt1E = " << sjt1.energy() << std::endl;
                 // std::cout << "\tsjt1Pz = " << sjt1.pz() << std::endl;
                 // std::cout << "\tsjt1y calc = " << 0.5*sjt1.pz() << std::endl;
-        
-                // std::cout << "\tsjt1 pt = " << sjt1.pt() << std::endl;
-                // std::cout << "\tsjt1 eta = " << sjt1.eta() << std::endl;
-                // std::cout << "\tsjt1 phi = " << sjt1.phi() << std::endl;
                 
                 if (groomedJet.numberOfDaughters() > 1) {
-                    const Candidate & sjt2 = *groomedJet.daughter(1);
-                    jets_.sjt2E[jets_.nref] = sjt2.energy();
-                    jets_.sjt2Y[jets_.nref] = sjt2.y();
-                    jets_.sjt2Pz[jets_.nref] = sjt2.pz();
-                    jets_.sjt2Pt[jets_.nref] = sjt2.pt();
-                    jets_.sjt2Eta[jets_.nref] = sjt2.eta();
-                    jets_.sjt2Phi[jets_.nref] = sjt2.phi();
-
-                    // std::cout << "\tsjt2 pt = " << sjt2.pt() << std::endl;
-                    // std::cout << "\tsjt2 eta = " << sjt2.eta() << std::endl;
-                    // std::cout << "\tsjt2 phi = " << sjt2.phi() << std::endl;
-
-                    // double delta_R_analyzer = std::sqrt(std::pow(sjt1.eta() - sjt2.eta(), 2) + std::pow(sjt1.phi() - sjt2.phi(), 2));
-                    // std::cout << "subjet delta_R_analyzer = " << delta_R_analyzer << std::endl;
+                const Candidate & sjt2 = *groomedJet.daughter(1);
+                jets_.sjt2E[jets_.nref] = sjt2.energy();
+                jets_.sjt2Y[jets_.nref] = sjt2.y();
+                jets_.sjt2Pz[jets_.nref] = sjt2.pz();
+                jets_.sjt2Pt[jets_.nref] = sjt2.pt();
+                jets_.sjt2Eta[jets_.nref] = sjt2.eta();
+                jets_.sjt2Phi[jets_.nref] = sjt2.phi();
                 } else{
-                    jets_.sjt2Pt[jets_.nref] = -1;
-                    jets_.sjt2Eta[jets_.nref] = -999;
-                    jets_.sjt2Phi[jets_.nref] = -999;
-                    jets_.sjt2E[jets_.nref] = -1;
-                    jets_.sjt2Y[jets_.nref] = -999;
-                    jets_.sjt2Pz[jets_.nref] = -999;
+                jets_.sjt2Pt[jets_.nref] = -1;
+                jets_.sjt2Eta[jets_.nref] = -999;
+                jets_.sjt2Phi[jets_.nref] = -999;
+                jets_.sjt2E[jets_.nref] = -1;
+                jets_.sjt2Y[jets_.nref] = -999;
+                jets_.sjt2Pz[jets_.nref] = -999;
                 }
             } else {
                 jets_.sjt1HasHF[jets_.nref] = -1;
