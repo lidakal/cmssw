@@ -134,11 +134,24 @@ void TriggerAnalyzer::analyze(edm::Event const& iEvent, edm::EventSetup const& i
 
     edm::TriggerNames const& triggerNames = iEvent.triggerNames(*hltresults);
 
+    std::vector<TString> select_hlt = {
+      "HLT_HIUPC_SingleEG",
+      "HLT_HIUPC_SingleJet",
+    };
+
     // 1st event : Book as many branches as trigger paths provided in the input...
     if (HltEvtCnt == 0) {
       int itdum = 0;
       for (auto const& dummy : hltdummies) {
         TString dummyname(dummy.data());
+
+        // Select triggers
+        bool keep = false;
+        for (TString trig : select_hlt) {
+          if (dummyname.Contains(trig)) keep = true;
+        }
+        if (!keep) continue;
+        
         t_->Branch(dummyname, hltflag + itdum, dummyname + "/I");
         t_->Branch(dummyname + "_PrescaleNumerator", hltPrescaleNumerator + itdum, dummyname + "_PrescaleNumerator/I");
         t_->Branch(dummyname + "_PrescaleDenominator", hltPrescaleDenominator + itdum, dummyname + "_PrescaleDenominator/I");
@@ -150,6 +163,14 @@ void TriggerAnalyzer::analyze(edm::Event const& iEvent, edm::EventSetup const& i
         const std::string& trigname = triggerNames.triggerName(itrig);
         if (pathtoindex.find(trigname) == pathtoindex.end()) {
           TString hltname = trigname;
+
+          // Select triggers
+          bool keep = false;
+          for (TString trig : select_hlt) {
+            if (hltname.Contains(trig)) keep = true;
+          }
+          if (!keep) continue;
+          
           t_->Branch(hltname, hltflag + itdum + itrig, hltname + "/I");
           t_->Branch(hltname + "_PrescaleNumerator", hltPrescaleNumerator + itdum + itrig, hltname + "_PrescaleNumerator/I");
           t_->Branch(hltname + "_PrescaleDenominator", hltPrescaleDenominator + itdum + itrig, hltname + "_PrescaleDenominator/I");
@@ -193,11 +214,29 @@ void TriggerAnalyzer::analyze(edm::Event const& iEvent, edm::EventSetup const& i
       l1Prescl[i] = -1;
     }
 
+    // Select l1 triggers
+    std::vector<TString> select_l1 = {
+      "L1_MinimumBiasHF1_AND_BptxAND",
+      "L1_MinimumBiasHF2_AND_BptxAND",
+      "L1_NotMinimumBiasHF2_AND_BptxAND",
+      "L1_ZDC1n",
+      "L1_SingleEG5_NotMinimumBiasHF2_AND_BptxAND",
+      "L1_SingleJet"
+    };
+
     // 1st event : Book as many branches as trigger paths provided in the input...
     if (L1EvtCnt == 0) {
       int itdum = 0;
       for (auto const& dummy : l1dummies) {
         TString dummyname(dummy.data());
+
+        // Select triggers
+        bool keep = false;
+        for (TString trig : select_l1) {
+          if (dummyname.Contains(trig)) keep = true;
+        }
+        if (!keep) continue;
+
         t_->Branch(dummyname, l1flag + itdum, dummyname + "/I");
         t_->Branch(dummyname + "_Prescl", l1Prescl + itdum, dummyname + "_Prescl/I");
         pathtoindex[dummy] = itdum;
@@ -211,6 +250,14 @@ void TriggerAnalyzer::analyze(edm::Event const& iEvent, edm::EventSetup const& i
 
         if (pathtoindex.find(trigname) == pathtoindex.end()) {
           TString l1name = trigname;
+
+          // Select triggers
+          bool keep = false;
+          for (TString trig : select_l1) {
+            if (l1name.Contains(trig)) keep = true;
+          }
+          if (!keep) continue;
+          
           t_->Branch(l1name, l1flag + itdum + il1, l1name + "/I");
           t_->Branch(l1name + "_Prescl", l1Prescl + itdum + il1, l1name + "_Prescl/I");
           pathtoindex[trigname] = itdum + il1;
