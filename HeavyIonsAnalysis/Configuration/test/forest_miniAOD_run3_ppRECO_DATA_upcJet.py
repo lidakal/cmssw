@@ -26,22 +26,26 @@ process.HiForestInfo.info = cms.vstring("HiForest, miniAOD, 132X, data")
 process.source = cms.Source("PoolSource",
     duplicateCheckMode = cms.untracked.string("noDuplicateCheck"),
     fileNames = cms.untracked.vstring(
-        # THESE ARE DATA FILES
-        #File below is miniAOD from PbPb ZB
-        # 'file:/eos/cms/store/group/phys_heavyions/nalewis/reco_RAW2DIGI_L1Reco_RECO_PAT_inMINIAOD_run374668_ls0012.root',
-        'root://cms-xrd-global.cern.ch//store/hidata/HIRun2023A/HIForward0/MINIAOD/16Jan2024-v1/2810000/0640e99d-84f5-49fd-a012-48be69252e99.root'
-        # ^ is this ppreco actually?
-        
-        # THESE ARE MC FILES
-        # ...
+        # 2023 data with prompt reco
+        '/store/hidata/HIRun2023A/HIForward0/MINIAOD/PromptReco-v2/000/374/810/00000/563ffd45-c6d0-45d1-adc2-46424283e330.root'
+
+        # 2023 data with 2024 upc rereco
+        # 'root://cms-xrd-global.cern.ch//store/hidata/HIRun2023A/HIForward0/MINIAOD/16Jan2024-v1/2810000/0640e99d-84f5-49fd-a012-48be69252e99.root'
     ), 
 )
 
 # number of events to process, set to -1 to process all events
 process.maxEvents = cms.untracked.PSet(
-#    input = cms.untracked.int32(150000)
-    input = cms.untracked.int32(1000)
+    input = cms.untracked.int32(1)
 )
+
+import FWCore.PythonUtilities.LumiList as LumiList
+process.source.lumisToProcess = LumiList.LumiList(filename = 'Cert_Collisions2023HI_374288_375823_Good_ZDC_Golden.json').getVLuminosityBlockRange()
+
+# Select specific event
+# process.source.lumisToProcess = cms.untracked.VLuminosityBlockRange('1:172')
+# process.source.eventsToProcess = cms.untracked.VEventRange('1:181724455')
+
 
 ###############################################################################
 
@@ -56,7 +60,7 @@ process.MessageLogger.cerr.FwkReport.reportEvery = 100
 
 from Configuration.AlCa.GlobalTag import GlobalTag
 #SWITCHING THE GT TO PROMPT RECO of PbPb
-process.GlobalTag = GlobalTag(process.GlobalTag, '132X_dataRun3_Prompt_v3', '')
+process.GlobalTag = GlobalTag(process.GlobalTag, '132X_dataRun3_Prompt_v4', '')
 process.HiForestInfo.GlobalTagLabel = process.GlobalTag.globaltag
 
 ###############################################################################
@@ -82,7 +86,6 @@ process.TFileService = cms.Service("TFileService",
 #CM TEMP EDIT
 process.load('HeavyIonsAnalysis.EventAnalysis.hltanalysis_cfi')
 process.load('HeavyIonsAnalysis.EventAnalysis.hievtanalyzer_data_cfi')
-process.load('HeavyIonsAnalysis.EventAnalysis.hltanalysis_cfi')
 process.load('HeavyIonsAnalysis.EventAnalysis.skimanalysis_cfi')
 process.load('HeavyIonsAnalysis.EventAnalysis.hltobject_cfi')
 process.load('HeavyIonsAnalysis.EventAnalysis.l1object_cfi')
@@ -90,8 +93,9 @@ process.load('HeavyIonsAnalysis.EventAnalysis.l1object_cfi')
 process.hiEvtAnalyzer.doCentrality = cms.bool(False)
 process.hiEvtAnalyzer.doHFfilters = cms.bool(False)
 
-#from HeavyIonsAnalysis.EventAnalysis.hltobject_cfi import trigger_list_data
-#process.hltobject.triggerNames = trigger_list_data
+# from HeavyIonsAnalysis.EventAnalysis.hltobject_cfi import trigger_list_data
+# process.hltobject.triggerNames = trigger_list_data
+# process.hltobject.triggerNames = cms.vstring(['HLT_HIUPC_SingleJet8_ZDC1nXOR_MaxPixelCluster50000_v2'])
 
 process.load('HeavyIonsAnalysis.EventAnalysis.particleFlowAnalyser_cfi')
 ################################
@@ -138,44 +142,44 @@ process.load("HeavyIonsAnalysis.TrackAnalysis.TrackAnalyzers_cff")
 ###############################################################################
 
 # ZDC RecHit Producer
-#CM Edit turn off the ZDC
-#process.load('HeavyIonsAnalysis.ZDCAnalysis.QWZDC2018Producer_cfi')
-#process.load('HeavyIonsAnalysis.ZDCAnalysis.QWZDC2018RecHit_cfi')
-#process.load('HeavyIonsAnalysis.ZDCAnalysis.zdcanalyzer_cfi')
+process.load('HeavyIonsAnalysis.ZDCAnalysis.QWZDC2018Producer_cfi')
+process.load('HeavyIonsAnalysis.ZDCAnalysis.QWZDC2018RecHit_cfi')
+process.load('HeavyIonsAnalysis.ZDCAnalysis.zdcanalyzer_cfi')
 
-#process.zdcanalyzer.doZDCRecHit = False
-#process.zdcanalyzer.doZDCDigi = True
-#process.zdcanalyzer.zdcRecHitSrc = cms.InputTag("QWzdcreco")
-#process.zdcanalyzer.zdcDigiSrc = cms.InputTag("hcalDigis", "ZDC")
-#process.zdcanalyzer.calZDCDigi = False
-#process.zdcanalyzer.verbose = False
-#
-#from CondCore.CondDB.CondDB_cfi import *
-#process.es_pool = cms.ESSource("PoolDBESSource",
-#    timetype = cms.string('runnumber'),
-#    toGet = cms.VPSet(
-#        cms.PSet(
-#            record = cms.string("HcalElectronicsMapRcd"),
-#            tag = cms.string("HcalElectronicsMap_2021_v2.0_data")
-#        )
-#    ),
-#    connect = cms.string('frontier://FrontierProd/CMS_CONDITIONS'),
-#        authenticationMethod = cms.untracked.uint32(1)
-#    )
-#
-#process.es_prefer = cms.ESPrefer('HcalTextCalibrations', 'es_ascii')
-#process.es_ascii = cms.ESSource(
-#    'HcalTextCalibrations',
-#    input = cms.VPSet(
-#        cms.PSet(
-#
-#            object = cms.string('ElectronicsMap'),
-#            file = cms.FileInPath("HeavyIonsAnalysis/Configuration/test/emap_2023_newZDC_v3.txt")
-#
-#             )
-#        )
-#    )
-#CM Edit end turn off ZDC
+process.zdcanalyzer.doZDCRecHit = False
+process.zdcanalyzer.doZDCDigi = True
+process.zdcanalyzer.zdcRecHitSrc = cms.InputTag("QWzdcreco")
+process.zdcanalyzer.zdcDigiSrc = cms.InputTag("hcalDigis", "ZDC")
+process.zdcanalyzer.calZDCDigi = False
+process.zdcanalyzer.verbose = False
+
+from CondCore.CondDB.CondDB_cfi import *
+process.es_pool = cms.ESSource("PoolDBESSource",
+   timetype = cms.string('runnumber'),
+   toGet = cms.VPSet(
+       cms.PSet(
+           record = cms.string("HcalElectronicsMapRcd"),
+           tag = cms.string("HcalElectronicsMap_2021_v2.0_data")
+       )
+   ),
+   connect = cms.string('frontier://FrontierProd/CMS_CONDITIONS'),
+       authenticationMethod = cms.untracked.uint32(1)
+   )
+
+process.es_prefer = cms.ESPrefer('HcalTextCalibrations', 'es_ascii')
+process.es_ascii = cms.ESSource(
+   'HcalTextCalibrations',
+   input = cms.VPSet(
+       cms.PSet(
+
+           object = cms.string('ElectronicsMap'),
+           file = cms.FileInPath("HeavyIonsAnalysis/Configuration/data/emap_2023_newZDC_v3.txt")
+
+            )
+       )
+   )
+
+process.zdc = cms.Sequence(process.zdcdigi * process.QWzdcreco * process.zdcanalyzer)
 
 ###############################################################################
 # main forest sequence
@@ -193,9 +197,7 @@ process.forest = cms.Path(
     # + process.ak4CaloJetAnalyzer
     # + process.particleFlowAnalyser
     # + process.ggHiNtuplizer
-    # + process.zdcdigi
-    # + process.QWzdcreco
-    # + process.zdcanalyzer
+    + process.zdc
     # + process.unpackedMuons
     # + process.muonAnalyzer
     )
@@ -244,8 +246,8 @@ process.pprimaryVertexFilter = cms.Path(process.primaryVertexFilter)
 # from HLTrigger.HLTfilters.hltHighLevel_cfi import hltHighLevel
 # process.hltfilter = hltHighLevel.clone(
 #    HLTPaths = [
-#        #"HLT_HIZeroBias_v4",                                                     
-#        "HLT_HIMinimumBias_v2",
+#        "HLT_HIUPC_SingleJet8_ZDC1nXOR_MaxPixelCluster50000_v2",                                                     
+#        "HLT_HIMinimumBiasHF1AND_v3",
 #    ]
 # )
 # process.filterSequence = cms.Sequence(
@@ -312,5 +314,6 @@ if addR4Jets :
     process.load("HeavyIonsAnalysis.JetAnalysis.candidateBtaggingMiniAOD_cff")
     process.ak4PFJetAnalyzer.jetTag = 'ak04PFpatJets'
     process.ak4PFJetAnalyzer.jetName = 'ak04PF'
+    process.ak4PFJetAnalyzer.jetPtMin = cms.double(5.0)
     process.ak4PFJetAnalyzer.doSubEvent = False # Need to disable this, since there is some issue with the gen jet constituents. More debugging needed is want to use constituents. 
     process.forest += process.extraJets * process.jetsR4 * process.ak4PFJetAnalyzer

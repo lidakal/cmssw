@@ -27,22 +27,23 @@ isMC = True
 process.source = cms.Source("PoolSource",
     duplicateCheckMode = cms.untracked.string("noDuplicateCheck"),
     fileNames = cms.untracked.vstring(
-        # THESE ARE DATA FILES
-        # File below is miniAOD from PbPb ZB
-        # 'file:/eos/cms/store/group/phys_heavyions/nalewis/reco_RAW2DIGI_L1Reco_RECO_PAT_inMINIAOD_run374668_ls0012.root',
-        # 'root://cms-xrd-global.cern.ch//store/hidata/HIRun2023A/HIForward0/MINIAOD/16Jan2024-v1/2810000/0640e99d-84f5-49fd-a012-48be69252e99.root'
-
-        # THESE ARE MC FILES
-        '/store/mc/HINPbPbSpring23MiniAOD/GNucleus-QCD_Pthat5_5p36TeV_pythia8/MINIAODSIM/NoPU_UPC_UPC_132X_mcRun3_2023_realistic_HI_v9-v2/2520000/026b19a7-b4c6-40d0-9f22-c67b3599c6da.root'
-        # '/store/himc/RunIISummer20UL17pp5TeVMiniAODv2/QCD_pThat-15_Dijet_TuneCP5_5p02TeV-pythia8/MINIAODSIM/106X_mc2017_realistic_forppRef5TeV_v3-v3/50000/02B9B981-840B-6343-8CCC-6D7708399944.root'
+        # '/store/mc/HINPbPbSpring23MiniAOD/GNucleus-QCD_Pthat5_5p36TeV_pythia8/MINIAODSIM/NoPU_UPC_UPC_132X_mcRun3_2023_realistic_HI_v9-v2/2520000/026b19a7-b4c6-40d0-9f22-c67b3599c6da.root'
+        '/store/mc/HINPbPbSpring23MiniAOD/GNucleus-QCD_Pthat5_5p36TeV_pythia8/MINIAODSIM/NoPU_UPC_UPC_132X_mcRun3_2023_realistic_HI_v9-v2/70000/3da68cd9-54e8-44a3-92f5-cd3369414a5f.root'
     ), 
 )
 
 # number of events to process, set to -1 to process all events
 process.maxEvents = cms.untracked.PSet(
-#    input = cms.untracked.int32(150000)
     input = cms.untracked.int32(1000)
 )
+
+# Debug memory issues (error 50660)
+# process.SimpleMemoryCheck = cms.Service(
+#     "SimpleMemoryCheck",
+#     oncePerEventMode = cms.untracked.bool(True),
+#     ignoreTotal = cms.untracked.int32(1)
+# )
+# end debug
 
 ###############################################################################
 
@@ -153,44 +154,44 @@ process.load("HeavyIonsAnalysis.TrackAnalysis.TrackAnalyzers_cff")
 ###############################################################################
 
 # ZDC RecHit Producer
-#CM Edit turn off the ZDC
-#process.load('HeavyIonsAnalysis.ZDCAnalysis.QWZDC2018Producer_cfi')
-#process.load('HeavyIonsAnalysis.ZDCAnalysis.QWZDC2018RecHit_cfi')
-#process.load('HeavyIonsAnalysis.ZDCAnalysis.zdcanalyzer_cfi')
+process.load('HeavyIonsAnalysis.ZDCAnalysis.QWZDC2018Producer_cfi')
+process.load('HeavyIonsAnalysis.ZDCAnalysis.QWZDC2018RecHit_cfi')
+process.load('HeavyIonsAnalysis.ZDCAnalysis.zdcanalyzer_cfi')
 
-#process.zdcanalyzer.doZDCRecHit = False
-#process.zdcanalyzer.doZDCDigi = True
-#process.zdcanalyzer.zdcRecHitSrc = cms.InputTag("QWzdcreco")
-#process.zdcanalyzer.zdcDigiSrc = cms.InputTag("hcalDigis", "ZDC")
-#process.zdcanalyzer.calZDCDigi = False
-#process.zdcanalyzer.verbose = False
-#
-#from CondCore.CondDB.CondDB_cfi import *
-#process.es_pool = cms.ESSource("PoolDBESSource",
-#    timetype = cms.string('runnumber'),
-#    toGet = cms.VPSet(
-#        cms.PSet(
-#            record = cms.string("HcalElectronicsMapRcd"),
-#            tag = cms.string("HcalElectronicsMap_2021_v2.0_data")
-#        )
-#    ),
-#    connect = cms.string('frontier://FrontierProd/CMS_CONDITIONS'),
-#        authenticationMethod = cms.untracked.uint32(1)
-#    )
-#
-#process.es_prefer = cms.ESPrefer('HcalTextCalibrations', 'es_ascii')
-#process.es_ascii = cms.ESSource(
-#    'HcalTextCalibrations',
-#    input = cms.VPSet(
-#        cms.PSet(
-#
-#            object = cms.string('ElectronicsMap'),
-#            file = cms.FileInPath("HeavyIonsAnalysis/Configuration/test/emap_2023_newZDC_v3.txt")
-#
-#             )
-#        )
-#    )
-#CM Edit end turn off ZDC
+process.zdcanalyzer.doZDCRecHit = False
+process.zdcanalyzer.doZDCDigi = True
+process.zdcanalyzer.zdcRecHitSrc = cms.InputTag("QWzdcreco")
+process.zdcanalyzer.zdcDigiSrc = cms.InputTag("hcalDigis", "ZDC")
+process.zdcanalyzer.calZDCDigi = False
+process.zdcanalyzer.verbose = False
+
+from CondCore.CondDB.CondDB_cfi import *
+process.es_pool = cms.ESSource("PoolDBESSource",
+   timetype = cms.string('runnumber'),
+   toGet = cms.VPSet(
+       cms.PSet(
+           record = cms.string("HcalElectronicsMapRcd"),
+           tag = cms.string("HcalElectronicsMap_2021_v2.0_data")
+       )
+   ),
+   connect = cms.string('frontier://FrontierProd/CMS_CONDITIONS'),
+       authenticationMethod = cms.untracked.uint32(1)
+   )
+
+process.es_prefer = cms.ESPrefer('HcalTextCalibrations', 'es_ascii')
+process.es_ascii = cms.ESSource(
+   'HcalTextCalibrations',
+   input = cms.VPSet(
+       cms.PSet(
+
+           object = cms.string('ElectronicsMap'),
+           file = cms.FileInPath("HeavyIonsAnalysis/Configuration/data/emap_2023_newZDC_v3.txt")
+
+            )
+       )
+   )
+
+process.zdc = cms.Sequence(process.zdcdigi * process.QWzdcreco * process.zdcanalyzer)
 
 ###############################################################################
 # main forest sequence
@@ -209,9 +210,7 @@ process.forest = cms.Path(
     # + process.ak4CaloJetAnalyzer
     # + process.particleFlowAnalyser
     # + process.ggHiNtuplizer
-    # + process.zdcdigi
-    # + process.QWzdcreco
-    # + process.zdcanalyzer
+    + process.zdc
     # + process.unpackedMuons
     # + process.muonAnalyzer
     # ,process.hiGenJetsTask
